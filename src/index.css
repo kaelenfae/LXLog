@@ -1,0 +1,464 @@
+/* Font Import */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.cdnfonts.com/css/opendyslexic');
+
+:root {
+  /* Modern Dark Theme - Linear Style (Default) */
+  --bg-app: #0f0f12;
+  --bg-panel: #16161a;
+  --bg-card: #1c1c21;
+  --bg-hover: #242429;
+
+  --border-subtle: #27272a;
+  --border-default: #3f3f46;
+  --border-focus: #52525b;
+
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+
+  --accent-primary: #6366f1;
+  /* Indigo-500 */
+  --accent-hover: #4f46e5;
+  /* Indigo-600 */
+  --accent-text: #ffffff;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* Light Theme - Warm Rose */
+html.light {
+  --bg-app: #fdf2f0;
+  --bg-panel: #fffafa;
+  --bg-card: #ffffff;
+  --bg-hover: #fcece8;
+
+  --border-subtle: #f0e1dd;
+  --border-default: #dccac3;
+  --border-focus: #bcaaa4;
+
+  --text-primary: #4a403d;
+  --text-secondary: #786b66;
+  --text-tertiary: #a89c97;
+
+  --accent-primary: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --accent-text: #ffffff;
+}
+
+/* Midnight Theme - Deep Blue */
+html.midnight {
+  --bg-app: #0a0e1a;
+  --bg-panel: #101728;
+  --bg-card: #162038;
+  --bg-hover: #1e2a48;
+
+  --border-subtle: #1e2a48;
+  --border-default: #2a3a5c;
+  --border-focus: #3a4a6c;
+
+  --text-primary: #e8edf5;
+  --text-secondary: #94a3c4;
+  --text-tertiary: #6b7a9a;
+
+  --accent-primary: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-text: #ffffff;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
+}
+
+/* Forest Theme - Dark Green */
+html.forest {
+  --bg-app: #0a120e;
+  --bg-panel: #0f1a14;
+  --bg-card: #14241c;
+  --bg-hover: #1a2e24;
+
+  --border-subtle: #1a2e24;
+  --border-default: #2a4036;
+  --border-focus: #3a5246;
+
+  --text-primary: #e8f0ec;
+  --text-secondary: #9ab4a4;
+  --text-tertiary: #6a8a7a;
+
+  --accent-primary: #10b981;
+  --accent-hover: #059669;
+  --accent-text: #ffffff;
+
+  --success: #34d399;
+  --warning: #fbbf24;
+  --error: #f87171;
+}
+
+/* Sunset Theme - Warm Orange/Brown */
+html.sunset {
+  --bg-app: #1a1410;
+  --bg-panel: #241c16;
+  --bg-card: #2e241c;
+  --bg-hover: #3a2e24;
+
+  --border-subtle: #3a2e24;
+  --border-default: #4a3e34;
+  --border-focus: #5a4e44;
+
+  --text-primary: #f5ebe0;
+  --text-secondary: #c4a88a;
+  --text-tertiary: #94785a;
+
+  --accent-primary: #f97316;
+  --accent-hover: #ea580c;
+  --accent-text: #ffffff;
+
+  --success: #22c55e;
+  --warning: #fbbf24;
+  --error: #ef4444;
+}
+
+/* Ocean Theme - Teal/Cyan */
+html.ocean {
+  --bg-app: #0a1214;
+  --bg-panel: #0e1a1e;
+  --bg-card: #142428;
+  --bg-hover: #1a2e34;
+
+  --border-subtle: #1a2e34;
+  --border-default: #2a4048;
+  --border-focus: #3a525a;
+
+  --text-primary: #e8f4f5;
+  --text-secondary: #8abcc4;
+  --text-tertiary: #5a9aa4;
+
+  --accent-primary: #06b6d4;
+  --accent-hover: #0891b2;
+  --accent-text: #ffffff;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #f87171;
+}
+
+/* Lavender Theme - Dark Purple */
+html.lavender {
+  --bg-app: #1a1420;
+  --bg-panel: #221a2a;
+  --bg-card: #2a2036;
+  --bg-hover: #342844;
+
+  --border-subtle: #342844;
+  --border-default: #443858;
+  --border-focus: #54486c;
+
+  --text-primary: #efe8f5;
+  --text-secondary: #b8a0d0;
+  --text-tertiary: #8870a8;
+
+  --accent-primary: #a855f7;
+  --accent-hover: #9333ea;
+  --accent-text: #ffffff;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
+}
+
+/* Hot Pink Theme - DISGUSTINGLY BRIGHT */
+html.hotpink {
+  --bg-app: #ff1493;
+  --bg-panel: #ff69b4;
+  --bg-card: #ffb6c1;
+  --bg-hover: #ff85a2;
+
+  --border-subtle: #ff1493;
+  --border-default: #ff00ff;
+  --border-focus: #ff00aa;
+
+  --text-primary: #1a0010;
+  --text-secondary: #4a0030;
+  --text-tertiary: #800050;
+
+  --accent-primary: #ff00ff;
+  --accent-hover: #cc00cc;
+  --accent-text: #000000;
+
+  --success: #00ff00;
+  --warning: #ffff00;
+  --error: #ff0000;
+}
+
+/* SNES Theme - Super Nintendo Purple/Charcoal */
+html.snes {
+  --bg-app: #2a2a34;
+  --bg-panel: #34343e;
+  --bg-card: #3e3e4a;
+  --bg-hover: #4a4a58;
+
+  --border-subtle: #4a4a58;
+  --border-default: #5e5690;
+  --border-focus: #7a72b0;
+
+  --text-primary: #e8e8f4;
+  --text-secondary: #b8b8d8;
+  --text-tertiary: #8a8aa8;
+
+  --accent-primary: #7a72b0;
+  --accent-hover: #5e5690;
+  --accent-text: #ffffff;
+
+  /* SNES lavender highlight */
+  --success: #72b890;
+  --warning: #d8b872;
+  --error: #d87272;
+}
+
+/* Colorblind Theme - Blue/Orange (CVD-friendly) */
+html.colorblind {
+  --bg-app: #0f1214;
+  --bg-panel: #161a1e;
+  --bg-card: #1e2428;
+  --bg-hover: #2a3238;
+
+  --border-subtle: #2a3238;
+  --border-default: #ee7733;
+  --border-focus: #ff8844;
+
+  --text-primary: #f0f4f8;
+  --text-secondary: #ffbb88;
+  --text-tertiary: #cc8855;
+
+  --accent-primary: #ee7733;
+  --accent-hover: #ff8844;
+  --accent-text: #000000;
+
+  /* CVD-safe status colors */
+  --success: #0077bb;
+  --warning: #ffaa00;
+  --error: #cc3311;
+}
+
+/* Dyslexic Theme - OpenDyslexic Font with calm colors */
+html.dyslexic {
+  --bg-app: #f5f5f0;
+  --bg-panel: #fafaf5;
+  --bg-card: #ffffff;
+  --bg-hover: #eeeeE8;
+
+  --border-subtle: #e0e0d8;
+  --border-default: #c8c8c0;
+  --border-focus: #a8a8a0;
+
+  --text-primary: #2a2a28;
+  --text-secondary: #4a4a48;
+  --text-tertiary: #6a6a68;
+
+  --accent-primary: #3366cc;
+  --accent-hover: #2255bb;
+  --accent-text: #ffffff;
+
+  --success: #228855;
+  --warning: #cc8800;
+  --error: #cc4444;
+
+  /* Override font for dyslexic theme */
+  --font-sans: 'OpenDyslexic', 'Comic Sans MS', sans-serif;
+}
+
+/* ===== ACCESSIBILITY CLASSES ===== */
+/* These can be combined with any theme */
+
+/* Dyslexic Mode - Apply OpenDyslexic font */
+html.dyslexic-mode {
+  --font-sans: 'OpenDyslexic', 'Comic Sans MS', sans-serif;
+}
+
+/* Reduced Motion - Disable animations and transitions */
+html.reduced-motion,
+html.reduced-motion * {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* High Contrast - Increase contrast for better visibility */
+html.high-contrast {
+  --border-subtle: var(--border-focus);
+  --border-default: var(--text-tertiary);
+  --text-secondary: var(--text-primary);
+  --text-tertiary: var(--text-secondary);
+}
+
+html.high-contrast * {
+  text-shadow: none !important;
+  box-shadow: 0 0 0 1px var(--border-default) !important;
+}
+
+/* Large Text - Increase base font size */
+html.large-text {
+  font-size: 120%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+  /* Fallback */
+  height: 100dvh;
+  width: 100vw;
+  /* CSS Grid Layout Root */
+  display: grid;
+  grid-template-areas:
+    "header header"
+    "sidebar main";
+  grid-template-columns: 260px 1fr;
+  grid-template-rows: 56px 1fr;
+}
+
+@media (max-width: 768px) {
+  #root {
+    grid-template-areas:
+      "header"
+      "main";
+    grid-template-columns: 1fr;
+    grid-template-rows: 56px 1fr;
+  }
+}
+
+#root.landing-layout {
+  display: block;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-focus);
+}
+
+/* Form Elements Reset */
+input,
+select,
+textarea {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.875rem;
+  transition: all 0.15s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* Button Reset */
+button {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+button:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--border-focus);
+}
+
+button.primary {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+button.primary:hover {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* Utility Classes */
+.text-xs {
+  font-size: 0.75rem;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+
+@media print {
+
+  body,
+  #root {
+    overflow: visible !important;
+    height: auto !important;
+    width: auto !important;
+    position: static !important;
+    display: block !important;
+  }
+
+  /* Prevent table rows being cut in half */
+  tr,
+  td,
+  th {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Ensure table header repeats on new pages (browser dependent, but good practice) */
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+}

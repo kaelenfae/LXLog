@@ -1,0 +1,187 @@
+Purpose	Channel	Dimmer	Position	Unit#	Instrument Type	Wattage	Accessories	Color	Template	Gobo Size	Circuit Name	Circuit#	Mark	System	Number 1	Number 2	Number 3	Number 4	Number 5	Number6	Dist From Centre	Text 2	Text 3	Text 4	Text 5 	Text 6 	User 13	User 14	User 15	User 16	User 17	User 18	Focus Needs	Focus L-R	Focus US-DS	Focus Notes	US	DS	SL	SR	Top	Bot	Focus Status	Beam	Axis
+Area	1		FOH 2	1	SELECON  Zoom 12-28°	575		R132				0		A							L18.8 ft													L18.8 ft	D28.0 ft								Not Focused		
+Area	2		FOH 2	5	SELECON  Zoom 12-28°	575		R132				0		A							L9.9 ft													L9.9 ft	D28.0 ft								Not Focused		
+Area	3		FOH 2	10	SELECON  Zoom 12-28°	575		R132				0		A							L.6 ft													L.6 ft	D28.0 ft								Not Focused		
+Area	4		FOH 2	15	SELECON  Zoom 12-28°	575		R132				0		A							R8.4 ft													R8.4 ft	D28.0 ft								Not Focused		
+Area	5		FOH 2	19	SELECON  Zoom 12-28°	575		R132				0		A							R16.8 ft													R16.8 ft	D28.0 ft								Not Focused		
+Area	6		FOH 1	4	SELECON  Zoom 12-28°	575		R132				0		A							L8.4 ft													L8.4 ft	D6.5 ft								Not Focused		
+Area	7		FOH 1	6	SELECON  Zoom 12-28°	575		R132				0		A							L4.1 ft													L4.1 ft	D6.5 ft								Not Focused		
+Area	8		FOH 1	8	SELECON  Zoom 12-28°	575		R132				0		A							R1.9 ft													R1.9 ft	D6.5 ft								Not Focused		
+Area	9		FOH 1	10	SELECON  Zoom 12-28°	575		R132				0		A							R6.5 ft													R6.5 ft	D6.5 ft								Not Focused		
+Arch Fr UL	10		FOH 1	5	SELECON  Zoom 12-28°	575		R132				0		A							L7.0 ft													L7.0 ft	D6.5 ft								Not Focused		
+Arch Fr UC	11		FOH 1	7	SELECON  Zoom 12-28°	575		R132				0		A							L1.0 ft													L1.0 ft	D6.5 ft								Not Focused		
+Arch Fr UR	12		FOH 1	9	SELECON  Zoom 12-28°	575		R132				0		A							R5.0 ft													R5.0 ft	D6.5 ft								Not Focused		
+Door Bax	13		#7 Electric - Flying	3	SELECON  Zoom 45-75°	575						0		A							R4.3 ft													R4.3 ft	U21.2 ft								Not Focused		
+C Window	14		#4A Electric	6	SELECON  Pacific 20°	575	Gobo Holder, 	L174	Window			0		A							R7.3 ft													R7.3 ft	U15.1 ft								Not Focused		
+Red Window	15		#4A Electric	5	SELECON  Pacific 20°	575	Gobo Holder, 	R26	Window			0		A							R5.8 ft													R5.8 ft	U15.1 ft								Not Focused		
+End Bed	16		# 3 Electric	10	SELECON  Pacific 20°	575		L202				0		A							L.9 ft													L.9 ft	U9.3 ft								Not Focused		
+OW Top	21		#1 Electric	2	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Const. A			0		A							L19.0 ft													L19.0 ft	U4.2 ft								Not Focused		
+OW Top	22		#1 Electric	3	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Const. A			0		A							L11.8 ft													L11.8 ft	U4.2 ft								Not Focused		
+OW Top	23		#1 Electric	6	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Const. A			0		A							L1.3 ft													L1.3 ft	U4.2 ft								Not Focused		
+OW Top	24		#1 Electric	9	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Const. A			0		A							R8.9 ft													R8.9 ft	U4.2 ft								Not Focused		
+OW Top	25		#1 Electric	10	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Const. A			0		A							R16.9 ft													R16.9 ft	U4.2 ft								Not Focused		
+OW Top	26		# 3 Electric	3	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Const. A			0		A							L14.1 ft													L14.1 ft	U9.3 ft								Not Focused		
+OW Top	27		# 3 Electric	7	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Const. A			0		A							L5.3 ft													L5.3 ft	U9.3 ft								Not Focused		
+OW Top	28		# 3 Electric	12	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Const. A			0		A							R2.2 ft													R2.2 ft	U9.3 ft								Not Focused		
+OW Top	29		# 3 Electric	18	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Const. A			0		A							R13.0 ft													R13.0 ft	U9.3 ft								Not Focused		
+OW Top	30		#6 Electric	2	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Const. A			0		A							L13.5 ft													L13.5 ft	U19.8 ft								Not Focused		
+OW Top	31		#6 Electric	3	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Const. A			0		A							L4.8 ft													L4.8 ft	U19.8 ft								Not Focused		
+OW Top	32		#6 Electric	6	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Const. A			0		A							R2.8 ft													R2.8 ft	U19.8 ft								Not Focused		
+OW Top	33		#6 Electric	10	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Const. A			0		A							R11.8 ft													R11.8 ft	U19.8 ft								Not Focused		
+W Motion	35		SL Gallery 1b	3	SELECON  Zoom 12-28°	575	Gobo Holder, Effects Wheel, 	R60	Dots			0		A							L41.0 ft													L41.0 ft	D18.5 ft								Not Focused		
+	35.1		SL Gallery 1b	3-A	Effects Wheel	0						0																																	
+W Motion	36		SL Gallery 1b	2	SELECON  Zoom 12-28°	575	Gobo Holder, Effects Wheel, 	R60	Dots			0		A							L41.0 ft													L41.0 ft	D17.2 ft								Not Focused		
+	36.1		SL Gallery 1b	2-A	Effects Wheel	0						0																																	
+C Motion	37		SR Gallery 1b	3	SELECON  Zoom 12-28°	575	Gobo Holder, Effects Wheel, 	R64	Dots			0		A							R41.0 ft													R41.0 ft	D18.6 ft								Not Focused		
+	37.1		SR Gallery 1b	3-A	Effects Wheel	0						0																																	
+C Motion	38		SR Gallery 1b	2	SELECON  Zoom 12-28°	575	Gobo Holder, Effects Wheel, 	R64	Dots			0		A							R41.0 ft													R41.0 ft	D17.3 ft								Not Focused		
+	38.1		SR Gallery 1b	2-A	Effects Wheel	0						0																																	
+Window Motion	39		#6 Electric	4	SELECON  Zoom 23-50°	575	Gobo Holder, Effects Wheel, 	R60	Dots			0		A							L3.3 ft													L3.3 ft	U19.8 ft								Not Focused		
+	39.1		#6 Electric	4-A	Effects Wheel	0						0																																	
+C Bax	41		# 3 Electric	5	SELECON  Pacific 30°	575	Gobo Holder, 	L202+R132	Const. A			0		A							L9.6 ft													L9.6 ft	U9.3 ft								Not Focused		
+C Bax	42		# 3 Electric	11	SELECON  Pacific 30°	575	Gobo Holder, 	L202+R132	Const. A			0		A							R.3 ft													R.3 ft	U9.3 ft								Not Focused		
+C Bax	43		# 3 Electric	15	SELECON  Pacific 30°	575	Gobo Holder, 	L202+R132	Const. A			0		A							R8.1 ft													R8.1 ft	U9.3 ft								Not Focused		
+C Bax	44		#4A Electric	2	SELECON  Pacific 30°	575	Gobo Holder, 	L202+R132	Const. A			0		A							L13.8 ft													L13.8 ft	U15.1 ft								Not Focused		
+C Bax	45		#4A Electric	3	SELECON  Pacific 30°	575	Gobo Holder, 	L202+R132	Const. A			0		A							L5.7 ft													L5.7 ft	U15.1 ft								Not Focused		
+C Bax	46		#4A Electric	4	SELECON  Pacific 30°	575	Gobo Holder, 	L202+R132	Const. A			0		A							R3.2 ft													R3.2 ft	U15.1 ft								Not Focused		
+C Bax	47		#4A Electric	7	SELECON  Pacific 30°	575	Gobo Holder, 	L202+R132	Const. A			0		A							R11.8 ft													R11.8 ft	U15.1 ft								Not Focused		
+C Bax	48		#8 Electric	2	SELECON  Pacific 30°	575	Gobo Holder, 	L202+R132	Const. A			0		A							L13.6 ft													L13.6 ft	U25.3 ft								Not Focused		
+C Bax	49		#8 Electric	3	SELECON  Pacific 30°	575	Gobo Holder, 	L202+R132	Const. A			0		A							L4.9 ft													L4.9 ft	U25.3 ft								Not Focused		
+C Bax	50		#8 Electric	4	SELECON  Pacific 30°	575	Gobo Holder, 	L202+R132	Const. A			0		A							R2.8 ft													R2.8 ft	U25.3 ft								Not Focused		
+C Bax	51		#8 Electric	5	SELECON  Pacific 30°	575	Gobo Holder, 	L202+R132	Const. A			0		A							R11.7 ft													R11.7 ft	U25.3 ft								Not Focused		
+DS Diag Fr L	52		FOH 1	1	SELECON  Zoom 12-28°	575	Gobo Holder, 	L202+R132	Binkley Reflections			0		A							L26.1 ft													L26.1 ft	D6.5 ft								Not Focused		
+DS Diag Fr L	53		FOH 1	2	SELECON  Zoom 12-28°	575	Gobo Holder, 	L202+R132	Binkley Reflections			0		A							L21.0 ft													L21.0 ft	D6.5 ft								Not Focused		
+DS Diag Fr L	54		FOH 1	3	SELECON  Zoom 12-28°	575	Gobo Holder, 	L202+R132	Binkley Reflections			0		A							L16.0 ft													L16.0 ft	D6.5 ft								Not Focused		
+DS Diag Fr L	55		FOH 1	11	SELECON  Zoom 12-28°	575	Gobo Holder, 	L202+R132	Binkley Reflections			0		A							R13.9 ft													R13.9 ft	D6.5 ft								Not Focused		
+DS Diag Fr L	56		FOH 1	12	SELECON  Zoom 12-28°	575	Gobo Holder, 	L202+R132	Binkley Reflections			0		A							R19.0 ft													R19.0 ft	D6.5 ft								Not Focused		
+DS Diag Fr L	57		FOH 1	13	SELECON  Zoom 12-28°	575	Gobo Holder, 	L202+R132	Binkley Reflections			0		A							R24.1 ft													R24.1 ft	D6.5 ft								Not Focused		
+Curtain Warmer	58		SL Gallery 1b	1	SELECON  Zoom 23-50°	575		R26				0		A							L41.0 ft													L41.0 ft	D14.2 ft								Not Focused		
+Curtain Warmer	58		SL Gallery 1a	1	SELECON  Zoom 45-75°	575		R26				0		A							L38.2 ft													L38.2 ft	D14.2 ft								Not Focused		
+Curtain Warmer	59		SR Gallery 1a	1	SELECON  Zoom 45-75°	575		R26				0		A							R38.1 ft													R38.1 ft	D14.2 ft								Not Focused		
+Curtain Warmer	59		SR Gallery 1b	1	SELECON  Zoom 23-50°	575		R26				0		A							R41.0 ft													R41.0 ft	D14.2 ft								Not Focused		
+Mid Gobo	61		Ladder SL @15'	5	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							L40.8 ft													L40.8 ft	U4.5 ft								Not Focused		
+Mid Gobo	62		Ladder SL @15'	4	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							L40.8 ft													L40.8 ft	U9.4 ft								Not Focused		
+Mid Gobo	63		Ladder SL @15'	3	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							L40.8 ft													L40.8 ft	U14.6 ft								Not Focused		
+Mid Gobo	64		Ladder SL @15'	2	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							L40.8 ft													L40.8 ft	U19.4 ft								Not Focused		
+Mid Gobo	65		Ladder SL @15'	1	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							L40.8 ft													L40.8 ft	U24.3 ft								Not Focused		
+Mid Gobo	66		Ladder SR @15'	5	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							R37.0 ft													R37.0 ft	U4.6 ft								Not Focused		
+Mid Gobo	67		Ladder SR @15'	4	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							R37.0 ft													R37.0 ft	U9.6 ft								Not Focused		
+Mid Gobo	68		Ladder SR @15'	3	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							R37.0 ft													R37.0 ft	U14.6 ft								Not Focused		
+Mid Gobo	69		Ladder SR @15'	2	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							R37.0 ft													R37.0 ft	U19.3 ft								Not Focused		
+Mid Gobo	70		Ladder SR @15'	1	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							R37.0 ft													R37.0 ft	U24.3 ft								Not Focused		
+Tip Gobo	71		#1 Electric	1	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							L24.1 ft													L24.1 ft	U4.2 ft								Not Focused		
+Tip Gobo	72		# 3 Electric	2	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							L24.0 ft													L24.0 ft	U9.3 ft								Not Focused		
+Tip Gobo	73		#4 Electric	1	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							L24.1 ft													L24.1 ft	U14.2 ft								Not Focused		
+Tip Gobo	74		#6 Electric	1	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							L24.0 ft													L24.0 ft	U19.8 ft								Not Focused		
+Tip Gobo	75		#8 Electric	1	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							L24.0 ft													L24.0 ft	U25.3 ft								Not Focused		
+Tip Gobo	76		#1 Electric	11	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							R22.0 ft													R22.0 ft	U4.2 ft								Not Focused		
+Tip Gobo	77		# 3 Electric	19	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							R22.0 ft													R22.0 ft	U9.3 ft								Not Focused		
+Tip Gobo	78		#4 Electric	5	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							R22.0 ft													R22.0 ft	U14.2 ft								Not Focused		
+Tip Gobo	79		#6 Electric	11	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							R22.0 ft													R22.0 ft	U19.8 ft								Not Focused		
+Tip Gobo	80		#8 Electric	6	SELECON  Pacific 30°	575	Gobo Holder, 	R132	Binkley Reflections			0		A							R22.0 ft													R22.0 ft	U25.3 ft								Not Focused		
+BR Car SL	81		FOH 2	4	SELECON  Zoom 12-28°	575		R132				0		A							L11.3 ft													L11.3 ft	D28.0 ft								Not Focused		
+BR L Front	82		FOH 2	6	SELECON  Zoom 12-28°	575		R132				0		A							L8.2 ft													L8.2 ft	D28.0 ft								Not Focused		
+BR L Front	83		FOH 2	8	SELECON  Zoom 12-28°	575		R132				0		A							L3.5 ft													L3.5 ft	D28.0 ft								Not Focused		
+BR C Front	84		FOH 2	9	SELECON  Zoom 12-28°	575		R132				0		A							L2.0 ft													L2.0 ft	D28.0 ft								Not Focused		
+BR C Front	85		FOH 2	12	SELECON  Zoom 12-28°	575		R132				0		A							R3.5 ft													R3.5 ft	D28.0 ft								Not Focused		
+BR R Front	86		FOH 2	13	SELECON  Zoom 12-28°	575		R132				0		A							R4.8 ft													R4.8 ft	D28.0 ft								Not Focused		
+BR R Front	87		FOH 2	16	SELECON  Zoom 12-28°	575		R132				0		A							R9.8 ft													R9.8 ft	D28.0 ft								Not Focused		
+BR Car SR	88		FOH 2	17	SELECON  Zoom 12-28°	575		R132				0		A							R11.6 ft													R11.6 ft	D28.0 ft								Not Focused		
+BR SL Top	91		# 3 Electric	4	SELECON  Zoom 23-50°	575	Gobo Holder, Color Scroller, 		Binkley Reflections			0		A							L10.8 ft													L10.8 ft	U9.3 ft								Not Focused		
+	91.1		# 3 Electric	4-A	Color Scroller	0						0																																	
+BR L Top	92		# 3 Electric	6	SELECON  Zoom 23-50°	575	Gobo Holder, Color Scroller, 		Binkley Reflections			0		A							L8.3 ft													L8.3 ft	U9.3 ft								Not Focused		
+	92.1		# 3 Electric	6-A	Color Scroller	0						0																																	
+BR L Top	93		# 3 Electric	8	SELECON  Zoom 23-50°	575	Gobo Holder, Color Scroller, 		Binkley Reflections			0		A							L3.4 ft													L3.4 ft	U9.3 ft								Not Focused		
+	93.1		# 3 Electric	8-A	Color Scroller	0						0																																	
+BR C Top	94		# 3 Electric	9	SELECON  Zoom 23-50°	575	Gobo Holder, Color Scroller, 		Binkley Reflections			0		A							L2.1 ft													L2.1 ft	U9.3 ft								Not Focused		
+	94.1		# 3 Electric	9-A	Color Scroller	0						0																																	
+BR C Top	95		# 3 Electric	13	SELECON  Zoom 23-50°	575	Gobo Holder, Color Scroller, 		Binkley Reflections			0		A							R3.5 ft													R3.5 ft	U9.3 ft								Not Focused		
+	95.1		# 3 Electric	13-A	Color Scroller	0						0																																	
+BR R Top	96		# 3 Electric	14	SELECON  Zoom 23-50°	575	Gobo Holder, Color Scroller, 		Binkley Reflections			0		A							R4.8 ft													R4.8 ft	U9.3 ft								Not Focused		
+	96.1		# 3 Electric	14-A	Color Scroller	0						0																																	
+BR R Top	97		# 3 Electric	16	SELECON  Zoom 23-50°	575	Gobo Holder, Color Scroller, 		Binkley Reflections			0		A							R9.7 ft													R9.7 ft	U9.3 ft								Not Focused		
+	97.1		# 3 Electric	16-A	Color Scroller	0						0																																	
+BR SR Top	98		# 3 Electric	17	SELECON  Zoom 23-50°	575	Gobo Holder, Color Scroller, 		Binkley Reflections			0		A							R11.8 ft													R11.8 ft	U9.3 ft								Not Focused		
+	98.1		# 3 Electric	17-A	Color Scroller	0						0																																	
+BR L Door Bax	99		#4A Electric	1	SELECON  Zoom 23-50°	575						0		A							L19.5 ft													L19.5 ft	U15.1 ft								Not Focused		
+BR R Door Bax	100		#4 Electric	6	SELECON  Pacific 20°	575						0		A							R25.5 ft													R25.5 ft	U14.2 ft								Not Focused		
+BR Hall Bax	101		#4 Electric	2	SELECON  Pacific 30°	575		R132				0		A							L4.5 ft													L4.5 ft	U14.2 ft								Not Focused		
+BR Hall Bax	102		#4 Electric	3	SELECON  Pacific 30°	575		R132				0		A							R2.0 ft													R2.0 ft	U14.2 ft								Not Focused		
+BR Hall Bax	103		#4 Electric	4	SELECON  Pacific 30°	575		R132				0		A							R8.5 ft													R8.5 ft	U14.2 ft								Not Focused		
+Hallway LED Strip	104	0	Set Lx	13	MOSS  DiffuseFLEX RGBW	0						0		A							R58.0 ft													R58.0 ft	U15.6 ft								Not Focused		
+QuickSpot USR	105	0	Set Lx	12	ASTERA  QuickSpot	0						0		A							R55.1 ft													R55.1 ft	U15.7 ft								Not Focused		
+QuickSpot USL	106	0	Set Lx	11	ASTERA  QuickSpot	0						0		A							R52.4 ft													R52.4 ft	U15.8 ft								Not Focused		
+Sconce BR L	107		Set Lx	8	GENERIC  Practical	575						0		A							R46.8 ft													R46.8 ft	U15.8 ft								Not Focused		
+Sconce BR C	108		Set Lx	9	GENERIC  Practical	575						0		A							R48.4 ft													R48.4 ft	U15.8 ft								Not Focused		
+Sconce BR R	109		Set Lx	10	GENERIC  Practical	575						0		A							R50.2 ft													R50.2 ft	U15.8 ft								Not Focused		
+Dining Front	111		FOH 2	2	SELECON  Zoom 12-28°	575		R132				0		A							L15.9 ft													L15.9 ft	D28.0 ft								Not Focused		
+Dining Front	112		FOH 2	11	SELECON  Zoom 12-28°	575		R132				0		A							R2.0 ft													R2.0 ft	D28.0 ft								Not Focused		
+Dining Front	113		FOH 2	3	SELECON  Zoom 12-28°	575		R132				0		A							L12.6 ft													L12.6 ft	D28.0 ft								Not Focused		
+Dining Front	114		FOH 2	14	SELECON  Zoom 12-28°	575		R132				0		A							R7.0 ft													R7.0 ft	D28.0 ft								Not Focused		
+Dining Front	115		FOH 2	7	SELECON  Zoom 12-28°	575		R132				0		A							L6.5 ft													L6.5 ft	D28.0 ft								Not Focused		
+Dining Front	116		FOH 2	18	SELECON  Zoom 12-28°	575		R132				0		A							R13.0 ft													R13.0 ft	D28.0 ft								Not Focused		
+Dining Door Bax L	117		# 3 Electric	1	SELECON  Pacific 20°	575						0		A							L27.5 ft													L27.5 ft	U9.3 ft								Not Focused		
+Dining Door Bax R	118		# 3 Electric	20	SELECON  Pacific 20°	575						0		A							R25.5 ft													R25.5 ft	U9.3 ft								Not Focused		
+Dining Ceiling	119	0	Set Lx	17	MOSS  DiffuseFLEX RGBW	0						0		A							R58.1 ft													R58.1 ft	U18.8 ft								Not Focused		
+Table Lamps x3	120		Set Lx	15	GENERIC  Practical	575						0		A							R52.3 ft													R52.3 ft	U19.1 ft								Not Focused		
+Dining Sconces x4	121		Set Lx	14	GENERIC  Practical	575						0		A							R50.3 ft													R50.3 ft	U19.1 ft								Not Focused		
+Obvs LED Windows	122	0	Set Lx	7	MOSS  DiffuseFLEX RGBW	0						0		A							R57.3 ft													R57.3 ft	U12.0 ft								Not Focused		
+Conductor Ceiling	123		Set Lx	16	GENERIC  Practical	575						0		A							R54.3 ft													R54.3 ft	U19.1 ft								Not Focused		
+Obvs Ceiling Fixture	124		Set Lx	6	GENERIC  Practical	575						0		A							R53.9 ft													R53.9 ft	U12.2 ft								Not Focused		
+Obvs Door Bax	125	0	Set Lx	4	ASTERA  QuickSpot	0						0		A							R50.2 ft													R50.2 ft	U12.2 ft								Not Focused		
+Obvs Windows	126		#6 Electric	9	SELECON  Zoom 23-50°	575		R16				0		A							R9.8 ft													R9.8 ft	U19.8 ft								Not Focused		
+Obvs Windows	127		#6 Electric	5	SELECON  Zoom 23-50°	575		R16				0		A							R.8 ft													R.8 ft	U19.8 ft								Not Focused		
+Obvs Windows	128		#6 Electric	8	SELECON  Zoom 23-50°	575		R16				0		A							R8.5 ft													R8.5 ft	U19.8 ft								Not Focused		
+Obvs Moon	129		#6 Electric	7	SELECON  Rama 7" Fresnel	1000		R62				0		A							R5.5 ft													R5.5 ft	U19.8 ft								Not Focused		
+Observation Cyc	131		#2 Electric - DS Cyc	1	ETC  ColorSource Cyc	0						0		A							L17.0 ft													L17.0 ft	U7.3 ft								Not Focused		
+Observation Cyc	132		#2 Electric - DS Cyc	2	ETC  ColorSource Cyc	0						0		A							L13.1 ft													L13.1 ft	U7.3 ft								Not Focused		
+Observation Cyc	133		#2 Electric - DS Cyc	3	ETC  ColorSource Cyc	0						0		A							L9.0 ft													L9.0 ft	U7.3 ft								Not Focused		
+Observation Cyc	134		#2 Electric - DS Cyc	4	ETC  ColorSource Cyc	0						0		A							L5.0 ft													L5.0 ft	U7.3 ft								Not Focused		
+Observation Cyc	135		#2 Electric - DS Cyc	5	ETC  ColorSource Cyc	0						0		A							L1.0 ft													L1.0 ft	U7.3 ft								Not Focused		
+Observation Cyc	136		#2 Electric - DS Cyc	6	ETC  ColorSource Cyc	0						0		A							R3.0 ft													R3.0 ft	U7.3 ft								Not Focused		
+Observation Cyc	137		#2 Electric - DS Cyc	7	ETC  ColorSource Cyc	0						0		A							R7.0 ft													R7.0 ft	U7.3 ft								Not Focused		
+Observation Cyc	138		#2 Electric - DS Cyc	8	ETC  ColorSource Cyc	0						0		A							R11.0 ft													R11.0 ft	U7.3 ft								Not Focused		
+Observation Cyc	139		#2 Electric - DS Cyc	9	ETC  ColorSource Cyc	0						0		A							R15.0 ft													R15.0 ft	U7.3 ft								Not Focused		
+Istanbul Cyc	141		#5 Electric - US Cyc	1	ETC  ColorSource Cyc	0						0		A							L17.1 ft													L17.1 ft	U18.8 ft								Not Focused		
+Istanbul Cyc	142		#5 Electric - US Cyc	2	ETC  ColorSource Cyc	0						0		A							L13.1 ft													L13.1 ft	U18.8 ft								Not Focused		
+Istanbul Cyc	143		#5 Electric - US Cyc	3	ETC  ColorSource Cyc	0						0		A							L9.0 ft													L9.0 ft	U18.8 ft								Not Focused		
+Istanbul Cyc	144		#5 Electric - US Cyc	4	ETC  ColorSource Cyc	0						0		A							L5.0 ft													L5.0 ft	U18.8 ft								Not Focused		
+Istanbul Cyc	145		#5 Electric - US Cyc	5	ETC  ColorSource Cyc	0						0		A							L1.0 ft													L1.0 ft	U18.8 ft								Not Focused		
+Istanbul Cyc	146		#5 Electric - US Cyc	6	ETC  ColorSource Cyc	0						0		A							R3.0 ft													R3.0 ft	U18.8 ft								Not Focused		
+Istanbul Cyc	147		#5 Electric - US Cyc	7	ETC  ColorSource Cyc	0						0		A							R7.0 ft													R7.0 ft	U18.8 ft								Not Focused		
+Istanbul Cyc	148		#5 Electric - US Cyc	8	ETC  ColorSource Cyc	0						0		A							R11.0 ft													R11.0 ft	U18.8 ft								Not Focused		
+Istanbul Cyc	149		#5 Electric - US Cyc	9	ETC  ColorSource Cyc	0						0		A							R15.0 ft													R15.0 ft	U18.8 ft								Not Focused		
+RGB Tape Footlights	151	0	Floor DS	3	GENERIC  LED Tape RGB	0						0		A							L10.6 ft													L10.6 ft	U.2 ft								Not Focused		
+RGB Tape Footlights	152	0	Floor DS	4	GENERIC  LED Tape RGB	0						0		A							L4.4 ft													L4.4 ft	U.2 ft								Not Focused		
+RGB Tape Footlights	153	0	Floor DS	5	GENERIC  LED Tape RGB	0						0		A							R2.4 ft													R2.4 ft	U.1 ft								Not Focused		
+RGB Tape Footlights	154	0	Floor DS	6	GENERIC  LED Tape RGB	0						0		A							R8.6 ft													R8.6 ft	U.1 ft								Not Focused		
+DSL Footlight	155	0	Floor DS	1	ASTERA  QuickSpot	0						0		A							L19.3 ft													L19.3 ft	U.3 ft								Not Focused		
+DSC Footlight	156	0	Floor DS	2	ASTERA  QuickSpot	0						0		A							L1.0 ft													L1.0 ft	U.3 ft								Not Focused		
+Portal LED SL	157	0	Set Lx	1	MOSS  DiffuseFLEX RGBW	0						0		A							R52.8 ft													R52.8 ft	U7.8 ft								Not Focused		
+Portal LED CS	158	0	Set Lx	2	MOSS  DiffuseFLEX RGBW	0						0		A							R55.4 ft													R55.4 ft	U7.8 ft								Not Focused		
+Portal Arch SR	159	0	Set Lx	3	MOSS  DiffuseFLEX RGBW	0						0		A							R58.1 ft													R58.1 ft	U7.8 ft								Not Focused		
+IQ Mirror DSL	191		Foh 2 Top Hang	1	SELECON  Pacific 20°	575	Moving Mirror, DMX Iris, 	R132				0		A							L7.0 ft													L7.0 ft	D31.5 ft								Not Focused		
+	191.1		Foh 2 Top Hang	1-A	Moving Mirror	0						0																																	
+	191.2		Foh 2 Top Hang	1-B	DMX Iris	0						0																																	
+IQ Mirror DSR	192		Foh 2 Top Hang	2	SELECON  Pacific 20°	575	Moving Mirror, DMX Iris, 	R132				0		A							R5.0 ft													R5.0 ft	D31.5 ft								Not Focused		
+	192.1		Foh 2 Top Hang	2-A	Moving Mirror	0						0																																	
+	192.2		Foh 2 Top Hang	2-B	DMX Iris	0						0																																	
+IQ Mirror USL	193		FOH 1 Top Hang	2	SELECON  Pacific 20°	575	Moving Mirror, DMX Iris, 	R132				0		A							L4.1 ft													L4.1 ft	D10.0 ft								Not Focused		
+	193.1		FOH 1 Top Hang	2-A	Moving Mirror	0						0																																	
+	193.2		FOH 1 Top Hang	2-B	DMX Iris	0						0																																	
+IQ Mirror USR	194		FOH 1 Top Hang	4	SELECON  Pacific 20°	575	Moving Mirror, DMX Iris, 	R132				0		A							R2.2 ft													R2.2 ft	D10.0 ft								Not Focused		
+	194.1		FOH 1 Top Hang	4-A	Moving Mirror	0						0																																	
+	194.2		FOH 1 Top Hang	4-B	DMX Iris	0						0																																	
+Khamsin DL	201	0	FOH 1 Top Hang	1	Ayrton  Khamsin TC	0						0		A							L8.0 ft													L8.0 ft	D10.0 ft								Not Focused		
+Khamsin DC	202	0	FOH 1 Top Hang	3	Ayrton  Khamsin TC	0						0		A							L1.1 ft													L1.1 ft	D10.0 ft								Not Focused		
+Khamsin DR	203	0	FOH 1 Top Hang	5	Ayrton  Khamsin TC	0						0		A							R6.0 ft													R6.0 ft	D10.0 ft								Not Focused		
+Khamsin SL	204	0	#1 Electric	4	Ayrton  Khamsin TC	0						0		A							L10.0 ft													L10.0 ft	U4.2 ft								Not Focused		
+Khamsin CL	205	0	#1 Electric	5	Ayrton  Khamsin TC	0						0		A							L5.8 ft													L5.8 ft	U4.2 ft								Not Focused		
+Khamsin CR	206	0	#1 Electric	7	Ayrton  Khamsin TC	0						0		A							R.5 ft													R.5 ft	U4.2 ft								Not Focused		
+Khamsin SR	207	0	#1 Electric	8	Ayrton  Khamsin TC	0						0		A							R7.2 ft													R7.2 ft	U4.2 ft								Not Focused		
+Khamsin Diag L	208	0	SL Gallery 1a	2	Ayrton  Khamsin TC	0						0		A							L38.2 ft													L38.2 ft	D17.9 ft								Not Focused		
+Khamsin Diag R	209	0	SR Gallery 1a	2	Ayrton  Khamsin TC	0						0		A							R38.1 ft													R38.1 ft	D18.1 ft								Not Focused		
+VL UC	210	0	#7 Electric - Flying	1	VARILITE  VL3500Q Spot	1200						0		A							L7.1 ft													L7.1 ft	U21.2 ft								Not Focused		
+VL UC	211	0	#7 Electric - Flying	2	VARILITE  VL3500Q Spot	1200						0		A							L1.0 ft													L1.0 ft	U21.2 ft								Not Focused		
+US Blue Works	300		#9 Electric	2	SELECON  Rama 7" Fresnel	1000		R64				0		A							R17.0 ft													R17.0 ft	U37.3 ft								Not Focused		
+US Blue Works	300		#9 Electric	1	SELECON  Rama 7" Fresnel	1000		R64				0		A							L17.0 ft													L17.0 ft	U37.3 ft								Not Focused		
