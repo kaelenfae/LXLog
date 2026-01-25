@@ -3,6 +3,17 @@ import { useNavigate } from 'react-router-dom';
 
 const PATCH_NOTES = [
     {
+        version: "0.3.0",
+        date: "2026-01-24",
+        title: "EOS Targets & Project Restructure",
+        changes: [
+            "New EOS Targets Report: View Groups, Presets, and Subs from EOS CSV imports.",
+            "Improved EOS CSV Import: Better parsing with UUID validation for accurate target detection.",
+            "Import Wizard: Field selection now available for EOS CHANNELS section.",
+            "Project licensed under GPLv3 for open-source contributions.",
+        ]
+    },
+    {
         version: "0.2.0",
         date: "2026-01-02",
         title: "Performance & UI Refinements",

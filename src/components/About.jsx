@@ -129,8 +129,19 @@ export function About() {
                             <p>
                                 Created by <strong>Kaelen Perchuk</strong>.
                             </p>
+                            <p className="mt-3">
+                                <strong>License:</strong> This project is open source under the{' '}
+                                <a
+                                    href="https://www.gnu.org/licenses/gpl-3.0.html"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[var(--accent-primary)] hover:underline"
+                                >
+                                    GNU General Public License v3.0
+                                </a>
+                            </p>
                             <p className="mt-2 text-xs">
-                                &copy; {new Date().getFullYear()} All rights reserved.
+                                &copy; {new Date().getFullYear()} LXLog. Licensed under GPLv3.
                             </p>
                         </section>
                     </div>
