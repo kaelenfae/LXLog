@@ -13,7 +13,7 @@ import { EquipmentListReport } from './components/EquipmentListReport';
 import { CuttingListReport } from './components/CuttingListReport';
 import { EosTargetsReport } from './components/EosTargetsReport';
 import { PatchNotes } from './components/PatchNotes';
-import { db, seedDatabase, exportShow, importShow, createNewShow, importEosCsv, importLightwrightTxt, importMa2Xml, importMa3Xml } from './db';
+import { db, seedDatabase, exportShow, importShow, createNewShow, importEosCsv, importLightwrightTxt, importMa2Xml } from './db';
 import './index.css';
 
 import { LandingPage } from './components/LandingPage';
@@ -138,9 +138,6 @@ function App() {
       } else if (format === 'ma2') {
         success = await importMa2Xml(fileContent, merge);
         errorMsg = "Failed to import MA2 XML file.";
-      } else if (format === 'ma3') {
-        success = await importMa3Xml(fileContent, merge);
-        errorMsg = "Failed to import MA3 XML file.";
       }
 
       // If successful and creating new schedule, save show metadata

@@ -27,8 +27,7 @@ const LW_FIELD_MAP = {
 const IMPORT_FORMATS = [
     { id: 'txt', name: 'Lightwright Text (.txt)', ext: '.txt' },
     { id: 'csv', name: 'EOS CSV (.csv)', ext: '.csv' },
-    { id: 'ma2', name: 'MA2 XML (.xml)', ext: '.xml' },
-    { id: 'ma3', name: 'MA3 XML (.xml)', ext: '.xml' }
+    { id: 'ma2', name: 'MA2 XML (.xml)', ext: '.xml' }
 ];
 
 export function ImportWizardModal({ onClose, onConfirm }) {

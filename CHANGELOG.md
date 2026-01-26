@@ -2,6 +2,13 @@
 
 All notable changes to LXLog will be documented in this file.
 
+## [0.3.1] - 2026-01-25
+
+### Changed
+- **Lightwright Import**: Added database index for `[channel+part]` to fix merge errors.
+- **Import Wizard**: Removed MA3 XML import option.
+- **MA2 Import**: Verified compatibility with updated merge logic.
+
 ## [0.3.0] - 2026-01-24
 
 ### Added

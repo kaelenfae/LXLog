@@ -3,8 +3,8 @@ import Dexie from 'dexie';
 export const db = new Dexie('LightingDB');
 
 // Bump version to force upgrade/reset schema changes
-db.version(11).stores({
-    instruments: '++id, channel, address, position, type, purpose, watt, color, part, unit, gobo, accessory, proportion, curve, notes, text1, text2, text3, text4, text5, text6, text7, text8, text9, text10',
+db.version(12).stores({
+    instruments: '++id, channel, [channel+part], address, position, type, purpose, watt, color, part, unit, gobo, accessory, proportion, curve, notes, text1, text2, text3, text4, text5, text6, text7, text8, text9, text10',
     showMetadata: '++id, name',
     eosTargets: '++id, targetType, targetId, label, channels'
 }).upgrade(tx => {
@@ -460,69 +460,6 @@ export const importMa2Xml = async (xmlString, merge = false) => {
         return await saveInstruments(instruments, merge);
     } catch (e) {
         console.error("MA2 XML Import Failed", e);
-        return false;
-    }
-};
-
-export const importMa3Xml = async (xmlString, merge = false) => {
-    try {
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
-        const fixtures = xmlDoc.getElementsByTagName("Fixture");
-        const instruments = [];
-
-        for (let i = 0; i < fixtures.length; i++) {
-            const fixture = fixtures[i];
-            const fid = fixture.getAttribute("FID");
-            const cid = fixture.getAttribute("CID");
-            const name = fixture.getAttribute("Name") || "";
-            const mode = fixture.getAttribute("Mode") || "";
-            const patch = fixture.getAttribute("Patch") || "";
-            let layer = fixture.getAttribute("Layer") || "";
-            const fixtureClass = fixture.getAttribute("Class") || "";
-
-            const channelStr = fid || cid;
-
-            if (channelStr) {
-                let address = patch.includes('.') ? patch.replace('.', ':') : patch;
-
-                if (layer.startsWith("'") && layer.endsWith("'")) {
-                    layer = layer.slice(1, -1);
-                } else if (layer.startsWith('"') && layer.endsWith('"')) {
-                    layer = layer.slice(1, -1);
-                }
-
-                instruments.push({
-                    channel: parseInt(channelStr) || channelStr,
-                    address: address,
-                    type: mode || fixtureClass || "Unknown MA3 Fixture",
-                    position: layer,
-                    purpose: name,
-                    color: '',
-                    watt: '',
-                    part: 1,
-                    proportion: 100,
-                    curve: '',
-                    notes: `Imported from MA3. Class: ${fixtureClass}`,
-                    text1: '',
-                    text2: '',
-                    text3: '',
-                    text4: '',
-                    text5: '',
-                    text6: '',
-                    text7: '',
-                    text8: '',
-                    text9: '',
-                    text10: ''
-                });
-            }
-        }
-
-        if (instruments.length === 0) throw new Error("No fixtures found in MA3 XML");
-
-        return await saveInstruments(instruments, merge);
-    } catch (e) {
-        console.error("MA3 XML Import Failed", e);
         return false;
     }
 };
