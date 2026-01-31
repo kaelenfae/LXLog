@@ -12,6 +12,7 @@ import { PatchReport } from './components/PatchReport';
 import { EquipmentListReport } from './components/EquipmentListReport';
 import { CuttingListReport } from './components/CuttingListReport';
 import { EosTargetsReport } from './components/EosTargetsReport';
+import { PowerReport } from './components/PowerReport';
 import { PatchNotes } from './components/PatchNotes';
 import { db, seedDatabase, exportShow, importShow, createNewShow, importEosCsv, importLightwrightTxt, importMa2Xml } from './db';
 import './index.css';
@@ -314,6 +315,7 @@ function AppContent({ isSidebarOpen, setIsSidebarOpen, handleLoad, handleSave, h
           <Route path="/app/reports/equipment-list" element={<EquipmentListReport />} />
           <Route path="/app/reports/cutting-list" element={<CuttingListReport />} />
           <Route path="/app/reports/eos-targets" element={<EosTargetsReport />} />
+          <Route path="/app/reports/power" element={<PowerReport />} />
           <Route path="/app/patch-notes" element={<PatchNotes />} />
 
           <Route path="/app/about" element={<About />} />

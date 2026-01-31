@@ -51,6 +51,9 @@ export function Sidebar() {
                 <NavLink to="/app/reports/cutting-list" className={navItemClass}>
                     Cutting List
                 </NavLink>
+                <NavLink to="/app/reports/power" className={navItemClass}>
+                    Power Report
+                </NavLink>
                 {eosTargetsCount > 0 && (
                     <NavLink to="/app/reports/eos-targets" className={navItemClass}>
                         EOS Targets
