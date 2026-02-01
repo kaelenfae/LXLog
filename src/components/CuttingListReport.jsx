@@ -16,7 +16,7 @@ export function CuttingListReport() {
         if (!instruments) return [];
 
         if (sortBy === 'color') {
-            // Group by color first, then by type within each color
+            // Group by color first, then by type+frameSize within each color
             const colorGroups = {};
             instruments.forEach(inst => {
                 if (!inst.color) return;
@@ -28,18 +28,25 @@ export function CuttingListReport() {
                 }
 
                 const type = inst.type || 'Unknown';
-                if (!colorGroups[color][type]) {
-                    colorGroups[color][type] = 0;
+                const frameSize = inst.gelFrameSize || '';
+                const key = frameSize ? `${type}|${frameSize}` : type;
+
+                if (!colorGroups[color][key]) {
+                    colorGroups[color][key] = { type, frameSize, count: 0 };
                 }
-                colorGroups[color][type]++;
+                colorGroups[color][key].count++;;
             });
 
             // Convert to array format
             return Object.entries(colorGroups)
                 .map(([color, types]) => {
-                    const typeTotals = Object.entries(types)
-                        .map(([type, count]) => ({ type, count }))
-                        .sort((a, b) => a.type.localeCompare(b.type));
+                    const typeTotals = Object.values(types)
+                        .map(item => ({ type: item.type, frameSize: item.frameSize, count: item.count }))
+                        .sort((a, b) => {
+                            const typeCompare = a.type.localeCompare(b.type);
+                            if (typeCompare !== 0) return typeCompare;
+                            return (a.frameSize || '').localeCompare(b.frameSize || '', undefined, { numeric: true });
+                        });
 
                     const totalCount = typeTotals.reduce((sum, t) => sum + t.count, 0);
 
@@ -64,18 +71,25 @@ export function CuttingListReport() {
                     typeGroups[type] = {};
                 }
 
-                if (!typeGroups[type][color]) {
-                    typeGroups[type][color] = 0;
+                const frameSize = inst.gelFrameSize || '';
+                const key = frameSize ? `${color}|${frameSize}` : color;
+
+                if (!typeGroups[type][key]) {
+                    typeGroups[type][key] = { color, frameSize, count: 0 };
                 }
-                typeGroups[type][color]++;
+                typeGroups[type][key].count++;;
             });
 
             // Convert to array format
             return Object.entries(typeGroups)
                 .map(([type, colors]) => {
-                    const colorTotals = Object.entries(colors)
-                        .map(([color, count]) => ({ color, count }))
-                        .sort((a, b) => a.color.localeCompare(b.color, undefined, { numeric: true }));
+                    const colorTotals = Object.values(colors)
+                        .map(item => ({ color: item.color, frameSize: item.frameSize, count: item.count }))
+                        .sort((a, b) => {
+                            const colorCompare = a.color.localeCompare(b.color, undefined, { numeric: true });
+                            if (colorCompare !== 0) return colorCompare;
+                            return (a.frameSize || '').localeCompare(b.frameSize || '', undefined, { numeric: true });
+                        });
 
                     const totalCount = colorTotals.reduce((sum, c) => sum + c.count, 0);
 
@@ -177,12 +191,13 @@ export function CuttingListReport() {
                                     <th className="py-1 text-left text-xs text-gray-600">
                                         {group.groupType === 'color' ? 'Instrument Type' : 'Color'}
                                     </th>
+                                    <th className="py-1 text-center text-xs text-gray-600">Frame Size</th>
                                     <th className="py-1 text-right text-xs text-gray-600">Quantity</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {group.items.map((item) => (
-                                    <tr key={item.type || item.color} className="border-b border-gray-100">
+                                {group.items.map((item, idx) => (
+                                    <tr key={`${item.type || item.color}-${item.frameSize || ''}-${idx}`} className="border-b border-gray-100">
                                         <td className="py-1 flex items-center gap-2">
                                             {item.color && group.groupType === 'type' && showSwatches && (
                                                 <span
@@ -192,6 +207,7 @@ export function CuttingListReport() {
                                             )}
                                             {item.type || item.color}
                                         </td>
+                                        <td className="py-1 text-center font-mono text-gray-600">{item.frameSize || '—'}</td>
                                         <td className="py-1 text-right font-mono font-bold">{item.count}</td>
                                     </tr>
                                 ))}

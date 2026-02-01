@@ -2,7 +2,18 @@
 // Approximate RGB/Hex values for common lighting gels.
 // Generated from https://github.com/eosti/color-filter-sds
 
-const GEL_DATA = {
+export const GEL_DATA = {
+    // Common Frosts (Visualized as Light Grey)
+    "R119": "#e0e0e0",
+    "R132": "#ebebeb",
+    "L228": "#ebebeb",
+    "L253": "#e0e0e0",
+    "L256": "#dcdcdc",
+    "L201": "#cce0ff", // CTB for context
+    "L202": "#e6f0ff", // 1/2 CTB
+    "L203": "#f0f5ff", // 1/4 CTB
+
+    // Existing Data
     "L002": "#ff78dc",
     "L003": "#faf0fa",
     "L004": "#ffc8b4",

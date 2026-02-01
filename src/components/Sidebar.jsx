@@ -27,6 +27,12 @@ export function Sidebar() {
                 <NavLink to="/app" end className={navItemClass}>
                     Instrument Schedule
                 </NavLink>
+                <NavLink to="/app/fixture-library" className={navItemClass}>
+                    Fixture Library
+                </NavLink>
+                <NavLink to="/app/dmx-view" className={navItemClass}>
+                    DMX Universe
+                </NavLink>
             </nav>
 
             <div className="px-3 py-2 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">

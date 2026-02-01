@@ -21,13 +21,14 @@ import { LandingPage } from './components/LandingPage';
 import { About } from './components/About';
 import { MasterDetailLayout } from './components/MasterDetailLayout';
 import { ImportWizardModal } from './components/ImportWizardModal';
+import { FixtureLibrary } from './components/FixtureLibrary';
+import { DmxUniverseView } from './components/DmxUniverseView';
 
 function App() {
   const [showModal, setShowModal] = React.useState(false);
   const [showSettings, setShowSettings] = React.useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [showImportModal, setShowImportModal] = React.useState(false);
-  const [pendingImport, setPendingImport] = React.useState({ file: null, type: null });
 
   useEffect(() => {
     seedDatabase();
@@ -316,6 +317,8 @@ function AppContent({ isSidebarOpen, setIsSidebarOpen, handleLoad, handleSave, h
           <Route path="/app/reports/cutting-list" element={<CuttingListReport />} />
           <Route path="/app/reports/eos-targets" element={<EosTargetsReport />} />
           <Route path="/app/reports/power" element={<PowerReport />} />
+          <Route path="/app/fixture-library" element={<FixtureLibrary />} />
+          <Route path="/app/dmx-view" element={<DmxUniverseView />} />
           <Route path="/app/patch-notes" element={<PatchNotes />} />
 
           <Route path="/app/about" element={<About />} />

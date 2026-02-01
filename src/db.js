@@ -2,17 +2,34 @@ import Dexie from 'dexie';
 
 export const db = new Dexie('LightingDB');
 
-// Bump version to force upgrade/reset schema changes
-db.version(12).stores({
-    instruments: '++id, channel, [channel+part], address, position, type, purpose, watt, color, part, unit, gobo, accessory, proportion, curve, notes, text1, text2, text3, text4, text5, text6, text7, text8, text9, text10',
+// Bump version to add fixtureLibrary for GDTF support
+// Bump version to add table for Notes
+db.version(14).stores({
+    instruments: '++id, channel, [channel+part], address, position, type, purpose, watt, color, part, unit, gobo, accessory, proportion, curve, notes, fixtureTypeId, text1, text2, text3, text4, text5, text6, text7, text8, text9, text10',
     showMetadata: '++id, name',
-    eosTargets: '++id, targetType, targetId, label, channels'
+    eosTargets: '++id, targetType, targetId, label, channels',
+    fixtureLibrary: '++id, fixtureTypeId, name, manufacturer, shortName',
+    instrumentNotes: '++id, instrumentId, timestamp, type' // type: 'user' | 'system'
 }).upgrade(tx => {
-    // For dev, clear old data on schema change
-    return Promise.all([
-        tx.table('instruments').clear()
-    ]);
+    // No migration needed
 });
+
+export const addNote = async (instrumentId, text, type = 'user') => {
+    return await db.instrumentNotes.add({
+        instrumentId: Number(instrumentId),
+        text,
+        type,
+        timestamp: Date.now()
+    });
+};
+
+export const getInstrumentNotes = async (instrumentId) => {
+    return await db.instrumentNotes
+        .where('instrumentId')
+        .equals(Number(instrumentId))
+        .reverse()
+        .sortBy('timestamp');
+};
 
 /**
  * Shared helper to save or merge instruments into the database
@@ -41,6 +58,61 @@ export const saveInstruments = async (instruments, merge = false) => {
             }
         }
         return true;
+    });
+};
+
+/**
+ * Update multiple instruments by ID
+ * @param {Array<number>} ids - Array of instrument IDs
+ * @param {Object} updates - Object of fields to update
+ */
+export const bulkUpdateInstruments = async (ids, updates, noteText = null) => {
+    return await db.transaction('rw', db.instruments, db.instrumentNotes, async () => {
+        // 1. Apply Updates
+        await db.instruments.where('id').anyOf(ids).modify(updates);
+
+        // 2. Log System and User Notes
+        const timestamp = Date.now();
+        const notes = [];
+
+        // Determine what changed for the log
+        let changeSummary = "";
+        if (Object.keys(updates).length > 0) {
+            changeSummary = Object.entries(updates)
+                .map(([key, val]) => `${key}: ${val}`)
+                .join(', ');
+        }
+
+        if (changeSummary) {
+            const sysText = `Bulk Update: ${changeSummary}`;
+            ids.forEach(id => {
+                notes.push({ instrumentId: id, text: sysText, type: 'system', timestamp });
+            });
+        }
+
+        if (noteText) {
+            ids.forEach(id => {
+                notes.push({ instrumentId: id, text: noteText, type: 'user', timestamp: timestamp + 1 }); // +1 to ensure it appears after/above system note if same time
+            });
+        }
+
+        if (notes.length > 0) {
+            await db.instrumentNotes.bulkAdd(notes);
+        }
+    });
+};
+
+/**
+ * Renumber units in a specific position
+ * @param {string} position - Position name to renumber
+ * @param {Array<number>} sortedIds - IDs in the desired order
+ */
+export const renumberPosition = async (position, sortedIds) => {
+    return await db.transaction('rw', db.instruments, async () => {
+        let unit = 1;
+        for (const id of sortedIds) {
+            await db.instruments.update(id, { unit: String(unit++) });
+        }
     });
 };
 

@@ -2,12 +2,14 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { db } from '../db';
+import { db, bulkUpdateInstruments, renumberPosition } from '../db';
 import { useSettings } from '../hooks/useSettings';
 import { formatAddress } from '../utils/addressFormatter';
 import { getGelColor } from '../utils/gelData';
 import { FilterModal } from './FilterModal';
 import { ContextMenu } from './ContextMenu';
+import { BulkEditPanel } from './BulkEditPanel';
+import { ColorSwatch } from './ColorSwatch';
 import classNames from 'classnames';
 
 // Helper Component
@@ -43,35 +45,6 @@ const IndeterminateCheckbox = ({ indeterminate, className = '', ...rest }) => {
     );
 };
 
-// Internal Layout Helper - Standardizes Cell Structure
-const LayoutCell = ({ children, className, onClick, ...props }) => (
-    <div
-        className={classNames("h-full flex items-center px-3 border-r border-[var(--border-subtle)] overflow-hidden whitespace-nowrap min-w-0", className)}
-        onClick={onClick}
-        {...props}
-    >
-        {children}
-    </div>
-);
-
-// Internal Row Helper - Standardizes Grid Layout
-const ScheduleGridRow = ({ gridTemplateCols, totalWidth, children, className, style, ...props }) => (
-    <div
-        style={{
-            ...style,
-            display: 'grid',
-            gridTemplateColumns: gridTemplateCols,
-            width: `${totalWidth}px`,
-            alignItems: 'stretch', // Ensure full height
-            boxSizing: 'border-box'
-        }}
-        className={classNames("border-b border-[var(--border-subtle)]", className)}
-        {...props}
-    >
-        {children}
-    </div>
-);
-
 // Column Definitions
 const COLUMN_DEFS = [
     { id: 'channel', label: 'Ch', width: 60 },
@@ -97,8 +70,6 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     const [isBatchEditOpen, setIsBatchEditOpen] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [isColumnConfigOpen, setIsColumnConfigOpen] = useState(false); // Gear Menu State
-    const [batchField, setBatchField] = useState('purpose');
-    const [batchValue, setBatchValue] = useState('');
     const [sortField, setSortField] = useState(() => localStorage.getItem('instrumentSchedule_sortField') || 'position');
     const [sortDirection, setSortDirection] = useState(() => localStorage.getItem('instrumentSchedule_sortDirection') || 'asc');
 
@@ -220,17 +191,6 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
             gobos: Array.from(goboSet).sort()
         };
     }, [rawInstruments]);
-
-    // Update visible columns state when dynamic columns change (to include new fields by default if needed, or just make them available)
-    // We won't auto-add them to visible set to avoid disrupting user layout, but they will be available in the menu.
-    // However, for the very first load or if the user expects to see them after import, maybe we should?
-    // Let's rely on the user adding them OR if they are missing from saved state.
-
-    // Actually, 'visibleColumns' is initialized from localStorage. 
-    // If we want new fields to appear, the user must select them. 
-    // BUT the user complaint implies they "disappeared" (if they were relying on text1-10 before).
-    // Let's assume the user knows how to configure columns, they just didn't see them available.
-    // By adding them to 'dynamicColumns', they will appear in the "Configure Columns" menu.
 
     const filteredInstruments = useMemo(() => {
         if (!rawInstruments) return [];
@@ -452,12 +412,11 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
         navigate(`/app/instrument/${inst.id}`, { state: { focusField: field } });
     };
 
-    const handleBatchUpdate = async () => {
-        if (!batchField || selectedIds.size === 0) return;
+    const handleBulkSave = async (updates, noteText) => {
+        if (selectedIds.size === 0) return;
         try {
-            await db.instruments.where('id').anyOf([...selectedIds]).modify({ [batchField]: batchValue });
+            await bulkUpdateInstruments([...selectedIds], updates, noteText);
             setIsBatchEditOpen(false);
-            setBatchValue('');
             setSelectedIds(new Set());
         } catch (err) {
             console.error("Batch update failed", err);
@@ -544,6 +503,23 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
         setSelectedIds(new Set(matchingIds));
     };
 
+    const handleRenumberPosition = async (position) => {
+        if (!position) return;
+        // Get all visible instruments in this position, preserving current sort order
+        const positionInstruments = filteredInstruments.filter(i => i.position === position);
+        if (positionInstruments.length === 0) return;
+
+        if (confirm(`Renumber ${positionInstruments.length} units in "${position}"? This will assign unit numbers 1-${positionInstruments.length} based on current sort order.`)) {
+            try {
+                const ids = positionInstruments.map(i => i.id);
+                await renumberPosition(position, ids);
+            } catch (err) {
+                console.error("Renumber failed", err);
+                alert("Failed to renumber position");
+            }
+        }
+    };
+
     if (!rawInstruments) return <div className="p-4 text-[#666]">Loading...</div>;
 
     const isActive = (id) => location.pathname === `/app/instrument/${id}`;
@@ -571,8 +547,6 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     ].join(' ');
 
     const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id] || 0), 0);
-
-    const totalColumns = visibleColumns.size + 1; // +1 for checkbox
 
     return (
         <div className="flex flex-col h-full relative bg-[var(--bg-app)]">
@@ -812,8 +786,8 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                                         if (col.id === 'color') {
                                             return (
                                                 <td key={col.id} className={classNames(cellClass, "group-hover:text-[var(--text-primary)]")} {...commonProps}>
-                                                    <div className="flex items-center h-full">
-                                                        <span className="inline-block w-3 h-3 rounded-full mr-2 border border-[var(--border-subtle)] ring-1 ring-white/10 shrink-0" style={{ backgroundColor: getGelColor(inst.color) }}></span>
+                                                    <div className="flex items-center h-full gap-2">
+                                                        <ColorSwatch color={inst.color} className="w-3 h-3 flex-none" rounded="rounded-sm" />
                                                         <span className="truncate">{inst.color}</span>
                                                     </div>
                                                 </td>
@@ -893,63 +867,11 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
             )}
 
             {isBatchEditOpen && (
-                <div className="absolute inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-lg shadow-2xl p-6 w-full max-w-sm">
-                        <h2 className="text-lg font-bold mb-4 text-[var(--text-primary)]">Batch Edit {selectedIds.size} Items</h2>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1 uppercase tracking-wider">Field</label>
-                                <select
-                                    className="w-full text-sm"
-                                    value={batchField}
-                                    onChange={(e) => setBatchField(e.target.value)}
-                                >
-                                    <option value="purpose">Purpose</option>
-                                    <option value="color">Color</option>
-                                    <option value="position">Position</option>
-                                    <option value="type">Type</option>
-                                    <option value="gobo">Gobo</option>
-                                    <option value="watt">Load (Watt)</option>
-                                    <option value="accessory">Accessory</option>
-                                    <option value="unit">Unit</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1 uppercase tracking-wider">New Value</label>
-                                <input
-                                    type="text"
-                                    className="w-full text-sm"
-                                    value={batchValue}
-                                    onChange={(e) => setBatchValue(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleBatchUpdate()}
-                                    placeholder={`Enter new ${batchField}...`}
-                                    autoFocus
-                                    list="batch-suggestions"
-                                    autoComplete="off"
-                                />
-                                <datalist id="batch-suggestions">
-                                    {Array.from(new Set(rawInstruments.map(i => i[batchField]).filter(Boolean))).sort().map(val => (
-                                        <option key={val} value={val} />
-                                    ))}
-                                </datalist>
-                            </div>
-                        </div>
-                        <div className="mt-6 flex justify-end gap-3">
-                            <button
-                                onClick={() => setIsBatchEditOpen(false)}
-                                className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleBatchUpdate}
-                                className="px-4 py-2 text-sm bg-[var(--accent-primary)] text-white rounded font-bold hover:bg-[var(--accent-hover)]"
-                            >
-                                Update
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <BulkEditPanel
+                    selectedCount={selectedIds.size}
+                    onUpdate={handleBulkSave}
+                    onClose={() => setIsBatchEditOpen(false)}
+                />
             )}
 
             {/* Context Menu */}
@@ -981,6 +903,12 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                             label: `Select All "${contextMenu.instrument.position || 'No Position'}"`,
                             icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
                             onClick: () => handleSelectAllSamePosition(contextMenu.instrument.position),
+                            disabled: !contextMenu.instrument.position
+                        },
+                        {
+                            label: `Renumber "${contextMenu.instrument.position}"`,
+                            icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" /></svg>,
+                            onClick: () => handleRenumberPosition(contextMenu.instrument.position),
                             disabled: !contextMenu.instrument.position
                         },
                         { separator: true },
