@@ -2,9 +2,11 @@
 
 All notable changes to LXLog will be documented in this file.
 
-## [0.3.1] - 2026-01-25
+## [0.3.1] - 2026-02-01
 
 ### Changed
+- **Code Quality**: Performed major cleanup (removed unused `ChannelHookup` component, unused state variables, and helpers).
+- **Documentation**: Added acknowledgement to Google Antigravity in README and About page.
 - **Lightwright Import**: Added database index for `[channel+part]` to fix merge errors.
 - **Import Wizard**: Removed MA3 XML import option.
 - **MA2 Import**: Verified compatibility with updated merge logic.
