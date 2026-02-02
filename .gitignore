@@ -22,4 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-LXLog0.3.0.zip
+LXLog*.zip
+
+# Test Data & Temporary Files
+/*.xml
+/*.csv
+/*.txt
+/*.pdf
+/scan_csv.js
+
