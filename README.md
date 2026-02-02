@@ -47,3 +47,7 @@ npm run electron:build
 ## License
 
 Proprietary - LXLog Team
+
+## Acknowledgements
+
+Created with the help of [Google Antigravity](https://deepmind.google/technologies/antigravity/).

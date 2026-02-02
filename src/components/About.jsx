@@ -127,7 +127,7 @@ export function About() {
 
                         <section className="pt-8 border-t border-[var(--border-subtle)] text-sm text-[var(--text-secondary)]">
                             <p>
-                                Created by <strong>Kaelen Perchuk</strong>.
+                                Created by <strong>Kaelen Perchuk</strong> with the help of <strong>Google Antigravity</strong>.
                             </p>
                             <p className="mt-3">
                                 <strong>License:</strong> This project is open source under the{' '}
@@ -147,6 +147,6 @@ export function About() {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
