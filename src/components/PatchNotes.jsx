@@ -3,6 +3,17 @@ import { useNavigate } from 'react-router-dom';
 
 const PATCH_NOTES = [
     {
+        version: "0.3.1",
+        date: "2026-02-01",
+        title: "Open Source & Deployment",
+        changes: [
+            "Now open source! View on GitHub: https://github.com/kaelenfae/LXLog",
+            "Switched Netlify deployment to automatic (live) builds.",
+            "Major code cleanup and optimization.",
+            "Documentation updates and Antigravity acknowledgement."
+        ]
+    },
+    {
         version: "0.3.0",
         date: "2026-01-24",
         title: "EOS Targets & Project Restructure",
