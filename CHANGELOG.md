@@ -6,6 +6,10 @@ All notable changes to LXLog will be documented in this file.
 
 ### Changed
 - **Open Source**: Now available on [GitHub](https://github.com/kaelenfae/LXLog).
+- **New Features**:
+  - **Power Report**: New report for calculating power loads per circuit/dimmer.
+  - **DMX Universe View**: Visual grid view of DMX universes and patching.
+  - **Fixture Library**: Added library management for GDTF files and fixture definitions.
 - **Deployment**: Changed netlify deployment to live (automatic) instead of manual.
 - **Code Quality**: Performed major cleanup (removed unused `ChannelHookup` component, unused state variables, and helpers).
 - **Documentation**: Added acknowledgement to Google Antigravity in README and About page.

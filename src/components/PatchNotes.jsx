@@ -8,6 +8,9 @@ const PATCH_NOTES = [
         title: "Open Source & Deployment",
         changes: [
             "Now open source! View on GitHub: https://github.com/kaelenfae/LXLog",
+            "New Feature: Power Report for calculating load.",
+            "New Feature: DMX Universe View for patch visualization.",
+            "New Feature: Fixture Library for managing GDTF definitions.",
             "Switched Netlify deployment to automatic (live) builds.",
             "Major code cleanup and optimization.",
             "Documentation updates and Antigravity acknowledgement."

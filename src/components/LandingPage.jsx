@@ -28,7 +28,7 @@ export function LandingPage() {
             <main className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-4 max-w-5xl mx-auto mt-[-5vh]">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-8 animate-fade-in-up">
                     <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>
-                    v0.3.0 Now Available
+                    v0.3.1 Now Available
                 </div>
 
                 <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1] mb-6 bg-gradient-to-b from-white to-white/60 bg-clip-text text-transparent">
