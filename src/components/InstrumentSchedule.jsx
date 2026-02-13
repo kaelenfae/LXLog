@@ -101,7 +101,7 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     const [contextMenu, setContextMenu] = useState(null); // { x, y, instrument }
 
     // Interface Settings
-    const { isCompact, addressMode, showUniverse1, channelDisplayMode } = useSettings();
+    const { isCompact, addressMode, showUniverse1, channelDisplayMode, universeSeparator, showCells } = useSettings();
 
     // Persist Visible Columns and Widths
     useEffect(() => {
@@ -286,6 +286,14 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                 const valA = chanA && reps[chanA] ? getSortVal(reps[chanA], sortField) : getSortVal(a, sortField);
                 const valB = chanB && reps[chanB] ? getSortVal(reps[chanB], sortField) : getSortVal(b, sortField);
 
+                // Ensure blank values are always at the bottom, regardless of sort direction
+                const isEmptyA = valA === undefined || valA === null || valA === '';
+                const isEmptyB = valB === undefined || valB === null || valB === '';
+
+                if (isEmptyA && !isEmptyB) return 1;
+                if (!isEmptyA && isEmptyB) return -1;
+                if (isEmptyA && isEmptyB) return 0;
+
                 const res = compareValues(valA, valB);
                 if (res !== 0) return sortDirection === 'asc' ? res : -res;
 
@@ -315,11 +323,31 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     // Flatten data for Virtualizer
     const rowItems = useMemo(() => {
         const items = [];
-        filteredInstruments.forEach((inst, index) => {
-            const prev = index > 0 ? filteredInstruments[index - 1] : null;
-            const isGroupStart = !prev || prev.channel !== inst.channel;
-            const isMultiPartGroup = multiPartChannels.has(inst.channel);
+        let groupMaster = null;
 
+        filteredInstruments.forEach((inst, index) => {
+            // Identify Group Master
+            if (!groupMaster || groupMaster.channel !== inst.channel) {
+                groupMaster = inst;
+            }
+
+            const prev = index > 0 ? filteredInstruments[index - 1] : null;
+
+            // Determine if this is the first item in the group
+            const isGroupStart = !prev || prev.channel !== inst.channel;
+
+            const isMultiPartGroup = multiPartChannels.has(inst.channel);
+            const isPart = inst.part > 1;
+
+            // Determine if this is a "Cell" (different type from master) or "Standard Part" (same type)
+            // Default to Part if types are missing, or Cell if types explicitly differ.
+            const isCell = isPart && (inst.type !== groupMaster.type);
+            const isStandardPart = isPart && !isCell;
+
+            // Filter cells if toggle is off
+            if (isCell && !showCells) return;
+
+            // EOS-style: Header Row for Standard Parts (Duplicates)
             if (isGroupStart && isMultiPartGroup && channelDisplayMode === 'parts') {
                 items.push({ type: 'header', value: inst.channel, id: `header-${inst.channel}-${index}` });
             }
@@ -328,16 +356,24 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                 items.push({ type: 'spacer', id: `spacer-${index}` });
             }
 
-            items.push({ type: 'instrument', data: inst, id: inst.id });
+            items.push({
+                type: 'instrument',
+                data: inst,
+                id: inst.id,
+                isCell,
+                isStandardPart,
+                isMultiPartGroup
+            });
         });
         return items;
-    }, [filteredInstruments, sortField, multiPartChannels]);
+    }, [filteredInstruments, sortField, multiPartChannels, showCells, channelDisplayMode]);
 
     const rowVirtualizer = useVirtualizer({
         count: rowItems.length,
         getScrollElement: () => parentRef.current,
         estimateSize: (i) => {
             const item = rowItems[i];
+            // Estimate size
             if (item.type === 'header') return 32;
             if (item.type === 'spacer') return isCompact ? 16 : 32;
             return isCompact ? 36 : 48; // Instrument row - Reverted to standard
@@ -365,6 +401,51 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
 
     const toggleSelection = (id, e) => {
         e?.stopPropagation();
+
+        const clickedIndex = filteredInstruments.findIndex(i => i.id === id);
+
+        // Handle Shift+Click (Range)
+        if (e?.shiftKey && clickedIndex !== -1) {
+            let anchorIndex = -1;
+
+            // 1. Try lastSelectedId
+            if (lastSelectedId) {
+                anchorIndex = filteredInstruments.findIndex(i => i.id === lastSelectedId);
+            }
+
+            // 2. Fallback: Find closest selected item (Smart Anchor)
+            if (anchorIndex === -1 && selectedIds.size > 0) {
+                let firstIdx = -1;
+                let lastIdx = -1;
+
+                // Scan current list for extremities of selection
+                filteredInstruments.forEach((inst, idx) => {
+                    if (selectedIds.has(inst.id)) {
+                        if (firstIdx === -1) firstIdx = idx;
+                        lastIdx = idx;
+                    }
+                });
+
+                if (firstIdx !== -1) {
+                    if (clickedIndex < firstIdx) anchorIndex = firstIdx; // Expand Up
+                    else if (clickedIndex > lastIdx) anchorIndex = lastIdx; // Expand Down
+                    else anchorIndex = firstIdx; // Default if inside
+                }
+            }
+
+            if (anchorIndex !== -1) {
+                const start = Math.min(anchorIndex, clickedIndex);
+                const end = Math.max(anchorIndex, clickedIndex);
+
+                const newSelected = new Set(selectedIds);
+                for (let i = start; i <= end; i++) {
+                    newSelected.add(filteredInstruments[i].id);
+                }
+                setSelectedIds(newSelected);
+                return;
+            }
+        }
+
         const newSelected = new Set(selectedIds);
         if (newSelected.has(id)) {
             newSelected.delete(id);
@@ -379,36 +460,41 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
         try {
             if (e.target.type === 'checkbox') return;
 
-            if (e.ctrlKey || e.metaKey) {
-                toggleSelection(inst.id);
-            } else if (e.shiftKey && lastSelectedId) {
-                const idx1 = filteredInstruments.findIndex(i => i.id === lastSelectedId);
-                const idx2 = filteredInstruments.findIndex(i => i.id === inst.id);
-                if (idx1 === -1 || idx2 === -1) return;
-
-                const start = Math.min(idx1, idx2);
-                const end = Math.max(idx1, idx2);
-
-                const newSelected = new Set(selectedIds);
-                for (let i = start; i <= end; i++) {
-                    newSelected.add(filteredInstruments[i].id);
-                }
-                setSelectedIds(newSelected);
-            } else {
-                if (selectedIds.size > 0 && !e.shiftKey && !e.ctrlKey) {
-                    toggleSelection(inst.id);
-                    return;
-                }
-                navigate(`/app/instrument/${inst.id}`);
+            if (e.ctrlKey || e.metaKey || e.shiftKey) {
+                toggleSelection(inst.id, e);
+                return;
             }
+
+            setSelectedIds(new Set()); // Clear selection on single edit
+            navigate(`/app/instrument/${inst.id}`);
         } catch (err) {
             console.error("Row click error:", err);
         }
     };
 
     const handleCellClick = (e, inst, field) => {
-        if (e.ctrlKey || e.shiftKey) return;
+        // 1. Modifiers -> Selection
+        if (e.ctrlKey || e.metaKey || e.shiftKey) {
+            toggleSelection(inst.id, e);
+            e.stopPropagation();
+            return;
+        }
+
         e.stopPropagation();
+
+        // 2. Bulk Edit Mode
+        if (selectedIds.size > 1 && selectedIds.has(inst.id)) {
+            navigate('/app/instrument/bulk', {
+                state: {
+                    ids: [...selectedIds],
+                    focusField: field
+                }
+            });
+            return;
+        }
+
+        // 3. Single Edit Mode
+        setSelectedIds(new Set()); // Clear selection on single edit
         navigate(`/app/instrument/${inst.id}`, { state: { focusField: field } });
     };
 
@@ -566,8 +652,8 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                             title="Configure Columns"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 4v16m6-16v16" />
+                                <rect x="4" y="4" width="16" height="16" rx="2" strokeWidth={2} />
                             </svg>
                         </button>
                         {isColumnConfigOpen && (
@@ -711,11 +797,14 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
 
                             // Instrument Row
                             const inst = item.data;
+                            // Extract flags from item metadata
+                            const isMultiPartGroup = item.isMultiPartGroup;
+                            const isCell = item.isCell;
+
                             const isAddrDuplicate = inst.address && inst.address !== '0:0' && inst.address !== '0' && addressCounts[inst.address] > 1;
                             const isChanDuplicate = inst.channel && channelCounts[String(inst.channel)] > 1;
                             const active = isActive(inst.id);
                             const selected = selectedIds && selectedIds.has(inst.id);
-                            const isMultiPartGroup = multiPartChannels.has(inst.channel);
                             const isEven = virtualRow.index % 2 === 0;
 
                             return (
@@ -746,7 +835,8 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                                             <input
                                                 type="checkbox"
                                                 checked={!!selected}
-                                                onChange={(e) => toggleSelection(inst.id, e)}
+                                                onChange={() => { }}
+                                                onClick={(e) => toggleSelection(inst.id, e)}
                                                 className="cursor-pointer rounded border-gray-600 bg-[#2b2b30] checked:bg-[var(--accent-primary)] focus:ring-[var(--accent-primary)]"
                                             />
                                         </div>
@@ -760,25 +850,77 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                                         };
 
                                         if (col.id === 'channel') {
-                                            const showAsPart = isMultiPartGroup && channelDisplayMode === 'parts';
+                                            // Show as part if it's in a standard duplicate group OR if it's a Cell
+                                            const showAsPart = (isMultiPartGroup && channelDisplayMode === 'parts') || isCell;
+
+                                            // Indentation styles for parts/cells
+                                            const partStyles = showAsPart ? {
+                                                paddingLeft: '24px',
+                                                position: 'relative'
+                                            } : {};
+
                                             return (
-                                                <td key={col.id} className={cellClass} {...commonProps}>
-                                                    {showAsPart ? (
-                                                        <span className="font-bold text-[var(--accent-primary)] text-xs tracking-wider">.{inst.part || 1}</span>
-                                                    ) : (
-                                                        <span className={classNames("font-bold font-mono", { "text-[var(--error)]": isChanDuplicate, "text-[var(--success)]": !isChanDuplicate })}>{inst.channel}</span>
+                                                <td key={col.id} className={cellClass} {...commonProps} style={partStyles}>
+                                                    {showAsPart && (
+                                                        <div className="absolute left-0 top-0 bottom-0 w-[12px] border-b-2 border-l-2 border-[var(--border-subtle)] rounded-bl-sm mb-[50%] ml-3 opacity-30 pointer-events-none"></div>
                                                     )}
+                                                    <div className="flex items-center gap-1">
+                                                        {(!isCell && !showAsPart && inst.type && (inst.type.includes('MC') || inst.type.includes('MultiCell'))) && (
+                                                            <span className="text-[var(--accent-primary)] text-[10px]">▼</span>
+                                                        )}
+                                                        {showAsPart ? (
+                                                            <span className="font-bold text-[var(--accent-primary)] text-xs tracking-wider">
+                                                                {isCell ? `.${inst.part}` : `P${inst.part || 1}`}
+                                                            </span>
+                                                        ) : (
+                                                            <span className={classNames("font-bold font-mono", { "text-[var(--error)]": isChanDuplicate, "text-[var(--success)]": !isChanDuplicate })}>{inst.channel}</span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             );
                                         }
 
                                         if (col.id === 'address') {
+                                            const footprint = parseInt(inst.dmxFootprint) || 1;
+                                            const displayAddr = formatAddress(inst.address, addressMode, showUniverse1, universeSeparator);
+
+                                            // Footprint Range Logic (similar to Detail Panel)
+                                            let rangeNode = null;
+                                            if (footprint > 1 && inst.address) {
+                                                const rawAddr = String(inst.address);
+                                                const isUniv = /[:/]/.test(rawAddr);
+
+                                                if (isUniv) {
+                                                    const parts = rawAddr.split(/[:/]/);
+                                                    const univ = parts[0];
+                                                    const start = parseInt(parts[1]);
+                                                    const end = start + footprint - 1;
+                                                    rangeNode = (
+                                                        <div className="text-[9px] opacity-70 font-bold text-[var(--accent-primary)] leading-none mt-0.5">
+                                                            {univ}{universeSeparator}{start} – {univ}{universeSeparator}{end}
+                                                        </div>
+                                                    );
+                                                } else {
+                                                    const start = parseInt(rawAddr);
+                                                    if (!isNaN(start)) {
+                                                        rangeNode = (
+                                                            <div className="text-[9px] opacity-70 font-bold text-[var(--accent-primary)] leading-none mt-0.5">
+                                                                {start} – {start + footprint - 1}
+                                                            </div>
+                                                        );
+                                                    }
+                                                }
+                                            }
+
                                             return (
                                                 <td key={col.id} className={classNames(cellClass, "font-mono", {
                                                     "text-[var(--error)] font-bold bg-red-500/10": isAddrDuplicate,
                                                     "text-yellow-500 font-bold bg-yellow-500/10": !inst.address || inst.address === '0:0' || inst.address === '0',
                                                 })} {...commonProps}>
-                                                    {formatAddress(inst.address, addressMode, showUniverse1)}
+                                                    <div className="flex flex-col justify-center h-full">
+                                                        <div className="leading-tight">{displayAddr}</div>
+                                                        {rangeNode}
+                                                    </div>
                                                 </td>
                                             );
                                         }
@@ -838,12 +980,6 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                             onClick={handleDuplicate}
                         >
                             Duplicate
-                        </button>
-                        <button
-                            className="text-xs px-3 py-1.5 rounded bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)] font-semibold shadow-lg shadow-indigo-500/20"
-                            onClick={() => setIsBatchEditOpen(true)}
-                        >
-                            Edit ({selectedIds.size})
                         </button>
                     </div>
                 </div>

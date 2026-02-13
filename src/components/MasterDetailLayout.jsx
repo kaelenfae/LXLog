@@ -118,19 +118,7 @@ export function MasterDetailLayout({ MasterComponent = InstrumentSchedule }) {
                     display: (window.innerWidth >= 768 && isCollapsed) ? 'none' : undefined
                 }}
             >
-                {/* Close Detail View Button (Desktop Only) */}
-                {!isCollapsed && (window.innerWidth >= 768) && (
-                    <div className="absolute top-2 left-2 z-50">
-                        <button
-                            className="p-1 rounded-full bg-[var(--bg-panel)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-primary)] shadow-sm opacity-50 hover:opacity-100 transition-all"
-                            onClick={toggleCollapse}
-                            title="Collapse Details"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                        </button>
-                    </div>
-                )}
-                <Outlet />
+                <Outlet context={{ onToggleDetail: toggleCollapse, isCollapsed }} />
             </div>
 
             {/* Overlay */}

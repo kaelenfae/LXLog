@@ -2,7 +2,7 @@
   "name": "developmentantigravity",
   "description": "Lighting Database and Logger",
   "author": "LXLog Team",
-  "version": "0.3.1",
+  "version": "0.3.5",
   "type": "module",
   "scripts": {
     "dev": "vite",

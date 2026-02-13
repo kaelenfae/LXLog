@@ -2,6 +2,24 @@
 
 All notable changes to LXLog will be documented in this file.
 
+## [0.3.5] - 2026-02-13
+
+### Added
+- **Address Range Visibility**: The Instrument Schedule now displays full DMX ranges (e.g., `1/1–1/4`) for multi-channel fixtures in the Address column.
+
+### Changed
+- **Data Integrity**: Session-specific data (EOS targets, GDTF library, and notes) is now automatically cleared when creating a New Show or performing a fresh import.
+- **UI Refinements**: 
+  - Moved the "Collapse Details" carat button into the detail panel header.
+  - Cleaned up redundant "Lightning" and "Close" icons from the detail header.
+  - Resized and standardized the "GDTF" population button in the Type field.
+  - Repositioned color swatches to prevent obscuring text prefixes.
+- **Address Logic**: Standardized and normalized universe separator logic (`:` vs `/`) across the app.
+
+### Fixed
+- Fixed "Enter" key accidentally closing the instrument detail panel.
+- Fixed critical bug preventing saving and creation of new instruments.
+
 ## [0.3.1] - 2026-02-01
 
 ### Changed

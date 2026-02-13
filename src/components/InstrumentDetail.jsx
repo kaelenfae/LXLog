@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useParams, useNavigate, useLocation, useOutletContext } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, addNote, getInstrumentNotes } from '../db';
+import { useSettings } from '../hooks/useSettings';
 import { getGelColor } from '../utils/gelData';
 import { ColorPicker } from './ColorPicker';
 import { ColorSwatch } from './ColorSwatch';
@@ -11,6 +12,13 @@ export function InstrumentDetail() {
     const navigate = useNavigate();
     const location = useLocation();
     const isNew = id === 'new';
+    const isBulk = location.pathname.includes('/bulk');
+    const bulkIds = location.state?.ids || [];
+    const { universeSeparator } = useSettings();
+    const { onToggleDetail } = useOutletContext() || {};
+
+    const [touchedFields, setTouchedFields] = useState(new Set());
+    const MIXED_VALUE = '(Mixed)';
 
     const [formData, setFormData] = useState({
         channel: '',
@@ -47,14 +55,26 @@ export function InstrumentDetail() {
 
     // Notes & History
     const [activeTab, setActiveTab] = useState('general');
-    const notes = useLiveQuery(() => isNew ? [] : getInstrumentNotes(id), [id, isNew]);
+    const notes = useLiveQuery(() => (isNew || isBulk) ? [] : getInstrumentNotes(id), [id, isNew, isBulk]);
     const [newNote, setNewNote] = useState('');
 
     // Load data if editing
-    const instrument = useLiveQuery(
-        () => (isNew ? undefined : db.instruments.get(Number(id))),
-        [id, isNew]
+    const singleInstrument = useLiveQuery(
+        () => (isNew || isBulk ? undefined : db.instruments.get(Number(id))),
+        [id, isNew, isBulk]
     );
+
+    const bulkInstruments = useLiveQuery(
+        () => (isBulk && bulkIds.length > 0 ? db.instruments.where('id').anyOf(bulkIds).toArray() : []),
+        [isBulk, bulkIds]
+    );
+
+    const instrument = isBulk ? null : singleInstrument;
+
+    // Stabilize dependencies to prevent useEffect loops
+    // useLiveQuery returns a new object reference on every render even if data hasn't changed
+    const stableInstrument = useMemo(() => instrument, [JSON.stringify(instrument)]);
+    const stableBulkInstruments = useMemo(() => bulkInstruments, [JSON.stringify(bulkInstruments)]);
 
     // Load Global Definitions
     const metadata = useLiveQuery(() => db.showMetadata.toArray());
@@ -105,7 +125,7 @@ export function InstrumentDetail() {
             if (inst.id === myId) return false; // Skip self
             if (!inst.address) return false;
 
-            const instMatch = inst.address.match(/^(\d+):(\d+)$/);
+            const instMatch = inst.address.match(/^(\d+)[:/](\d+)$/);
             if (!instMatch) return false;
 
             const instUniv = parseInt(instMatch[1]);
@@ -121,9 +141,27 @@ export function InstrumentDetail() {
     }, [formData.address, formData.dmxFootprint, allInstruments, id, isNew]);
 
     useEffect(() => {
-        if (instrument) {
-            setFormData(instrument);
-            // Used for local state if needed, but we now drive mainly from globalFieldDefs
+        if (isBulk && bulkInstruments && bulkInstruments.length > 0) {
+            // Calculate common values
+            const commonData = {
+                channel: '', address: '', dmxFootprint: '', type: '', watt: '', weight: '',
+                purpose: '', position: '', unit: '', gobo: '', accessory: '', color: '',
+                gelFrameSize: '', fixtureTypeId: '', customFields: {}
+            };
+
+            const first = bulkInstruments[0];
+            const keys = Object.keys(commonData);
+
+            keys.forEach(key => {
+                if (key === 'customFields') return; // Skip complex obj for now or handle deep compare
+                const allSame = bulkInstruments.every(inst => inst[key] === first[key]);
+                commonData[key] = allSame ? first[key] : (key === 'channel' || key === 'address' || key === 'unit' ? MIXED_VALUE : MIXED_VALUE);
+            });
+
+            // Handle custom fields separately if needed, for now ignore
+            setFormData(commonData);
+        } else if (stableInstrument) {
+            setFormData(stableInstrument);
         } else if (isNew) {
             setFormData({
                 channel: '',
@@ -143,7 +181,20 @@ export function InstrumentDetail() {
                 customFields: {}
             });
         }
-    }, [instrument, isNew]);
+    }, [stableInstrument, isNew, isBulk, stableBulkInstruments]);
+
+    // Sync address separator when setting changes or data loads
+    useEffect(() => {
+        if (formData.address) {
+            const otherSeparator = universeSeparator === ':' ? '/' : ':';
+            if (formData.address.includes(otherSeparator)) {
+                setFormData(prev => ({
+                    ...prev,
+                    address: prev.address.replace(otherSeparator, universeSeparator)
+                }));
+            }
+        }
+    }, [universeSeparator, formData.address]);
 
     // Handle field focus from navigation state
     useEffect(() => {
@@ -165,12 +216,39 @@ export function InstrumentDetail() {
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+        if (isBulk) {
+            setTouchedFields(prev => new Set(prev).add(name));
+        }
     };
 
     const [showDupConfirm, setShowDupConfirm] = useState(false);
     const [pendingSaveData, setPendingSaveData] = useState(null);
 
     const handleSave = async (forceSave = false) => {
+        if (isBulk) {
+            // Bulk Save Logic
+            if (touchedFields.size === 0) {
+                navigate('..');
+                return;
+            }
+
+            const updates = {};
+            touchedFields.forEach(field => {
+                updates[field] = formData[field];
+            });
+
+            // If updating address/channel, we might need special logic (e.g. auto-increment) logic but for "bulk edit" usually users set same value (e.g. all Position = FOH).
+            // Users are responsible for collisions if they bulk-set ID fields.
+
+            await db.instruments.where('id').anyOf(bulkIds).modify(updates);
+
+            // Log changes? Ideally yes but might spam. System note on first or all? 
+            // Let's skip detailed logs for bulk for now or log "Bulk Update" to system log.
+
+            navigate('..');
+            return;
+        }
+
         // Parse channel for parts (e.g., "103.1")
         const dataToSave = { ...formData };
 
@@ -180,9 +258,11 @@ export function InstrumentDetail() {
                 const addrVal = parseInt(dataToSave.address, 10);
                 const universe = Math.floor((addrVal - 1) / 512) + 1;
                 const address = (addrVal - 1) % 512 + 1;
-                dataToSave.address = `${universe}:${address}`;
+                dataToSave.address = `${universe}${universeSeparator}${address}`;
             } else {
-                dataToSave.address = dataToSave.address.replace('/', ':');
+                // Ensure the separator matches the setting
+                const otherSeparator = universeSeparator === ':' ? '/' : ':';
+                dataToSave.address = dataToSave.address.replace(otherSeparator, universeSeparator);
             }
         }
 
@@ -278,6 +358,13 @@ export function InstrumentDetail() {
     };
 
     const handleDelete = async () => {
+        if (isBulk) {
+            if (window.confirm(`Are you sure you want to delete ${bulkIds.length} instruments?`)) {
+                await db.instruments.bulkDelete(bulkIds);
+                navigate('..');
+            }
+            return;
+        }
         if (!isNew && window.confirm("Are you sure you want to delete this instrument?")) {
             await db.instruments.delete(Number(id));
             navigate('..');
@@ -314,10 +401,18 @@ export function InstrumentDetail() {
             {/* Panel Header */}
             <div className="h-14 border-b border-[var(--border-subtle)] flex items-center px-6 justify-between bg-[var(--bg-card)] shrink-0">
                 <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded bg-[var(--bg-hover)] flex items-center justify-center text-[var(--accent-primary)]">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                    </div>
-                    <h2 className="text-lg font-semibold text-[var(--text-primary)]">{isNew ? 'New Instrument' : 'Edit Details'}</h2>
+                    {onToggleDetail && (
+                        <button
+                            onClick={onToggleDetail}
+                            className="p-1.5 rounded-md hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors mr-1"
+                            title="Collapse Details"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                    )}
+                    <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+                        {isBulk ? `Bulk Edit (${bulkIds.length} Instruments)` : (isNew ? 'New Instrument' : 'Edit Details')}
+                    </h2>
                 </div>
                 <div className="flex gap-2">
                     {!isNew && (
@@ -325,9 +420,6 @@ export function InstrumentDetail() {
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                     )}
-                    <button onClick={() => navigate('..')} className="p-2 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded transition-colors" title="Close">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
                 </div>
             </div>
 
@@ -339,7 +431,7 @@ export function InstrumentDetail() {
                 >
                     General
                 </button>
-                {!isNew && (
+                {!isNew && !isBulk && (
                     <button
                         onClick={() => setActiveTab('history')}
                         className={`py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'history' ? 'border-[var(--accent-primary)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'}`}
@@ -353,75 +445,48 @@ export function InstrumentDetail() {
             <div className="flex-1 overflow-auto p-6">
                 {activeTab === 'general' ? (
                     <form className="grid grid-cols-1 gap-5 max-w-lg mx-auto" onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
-                        <div className="grid grid-cols-3 gap-4">
+                        {isBulk && (
+                            <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-md p-3 mb-4">
+                                <div className="flex items-center gap-2 text-indigo-400 text-sm font-medium">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    Bulk Edit Mode
+                                </div>
+                                <p className="text-xs text-[var(--text-secondary)] mt-1 ml-7">
+                                    Fields marked <strong>{MIXED_VALUE}</strong> have different values.
+                                    Changing a field updates <strong>all {bulkIds.length} instruments</strong>.
+                                </p>
+                            </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Channel</label>
                                 <input name="channel" value={formData.channel || ''} onChange={handleChange} autoFocus={!location.state?.focusField} className="font-mono text-lg font-bold text-[var(--accent-primary)] panel-input" placeholder="#" autoComplete="off" />
                             </div>
-                            <div className="flex flex-col gap-1.5">
+                            <div className="flex flex-col gap-1.5 relative">
                                 <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Address</label>
-                                <input name="address" value={formData.address || ''} onChange={handleChange} placeholder="Univ:Addr" className="font-mono panel-input" autoComplete="off" />
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                                <div className="flex items-center gap-1">
-                                    <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Footprint</label>
-                                    {linkedFixture && linkedFixture.dmxModes?.length > 0 && (
-                                        <div className="relative group">
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowDmxMap(true)}
-                                                className="w-4 h-4 text-[10px] font-bold rounded-full bg-[var(--bg-hover)] border border-[var(--border-subtle)] text-[var(--text-tertiary)] hover:text-[var(--accent-primary)] hover:border-[var(--accent-primary)] transition-colors flex items-center justify-center leading-none cursor-help"
-                                            >
-                                                ?
-                                            </button>
-                                            {/* Hover Tooltip */}
-                                            <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover:block">
-                                                <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-lg shadow-xl p-3 w-64 max-h-64 overflow-auto">
-                                                    <div className="text-xs font-medium text-[var(--text-primary)] mb-2">
-                                                        {linkedFixture.name} - DMX Map
-                                                    </div>
-                                                    {linkedFixture.dmxModes.slice(0, 1).map((mode, modeIdx) => (
-                                                        <div key={modeIdx}>
-                                                            <div className="text-[10px] text-[var(--accent-primary)] mb-1">{mode.name} ({mode.footprint}ch)</div>
-                                                            {mode.channels && mode.channels.length > 0 ? (
-                                                                <div className="space-y-0.5">
-                                                                    {mode.channels.map((ch, idx) => (
-                                                                        <div key={idx} className="flex text-[10px] font-mono">
-                                                                            <span className="w-6 text-[var(--accent-primary)]">{ch.dmxAddress}</span>
-                                                                            <span className="text-[var(--text-secondary)] flex-1">{ch.attribute}</span>
-                                                                            {ch.resolution && <span className="text-[var(--text-tertiary)]">{ch.resolution}</span>}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            ) : (
-                                                                <div className="text-[10px] text-[var(--text-tertiary)] italic">No channel data</div>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                                <input name="dmxFootprint" value={formData.dmxFootprint || ''} onChange={handleChange} placeholder="Ch" className="font-mono panel-input" autoComplete="off" />
+                                <input name="address" value={formData.address || ''} onChange={handleChange} placeholder={`Univ${universeSeparator}Addr`} className="font-mono panel-input" autoComplete="off" />
+                                {/* Address Range Display */}
+                                {formData.address && formData.dmxFootprint && parseInt(formData.dmxFootprint) > 1 && (
+                                    <div className="absolute top-0 right-0 text-[10px] font-mono text-[var(--accent-primary)] font-bold">
+                                        {(() => {
+                                            const footprint = parseInt(formData.dmxFootprint) || 1;
+                                            // Escape the separator for regex in case it's special char like /
+                                            const sepRegex = universeSeparator === '/' ? '/' : ':';
+                                            const regex = new RegExp(`^(\\d+)[${sepRegex}](\\d+)$`);
+                                            const addrMatch = formData.address.match(regex);
+
+                                            if (addrMatch) {
+                                                const univ = parseInt(addrMatch[1]);
+                                                const startAddr = parseInt(addrMatch[2]);
+                                                const endAddr = startAddr + footprint - 1;
+                                                return <span>{univ}{universeSeparator}{startAddr} – {univ}{universeSeparator}{endAddr}</span>;
+                                            }
+                                            return null;
+                                        })()}
+                                    </div>
+                                )}
                             </div>
                         </div>
-                        {/* Address Range Display */}
-                        {formData.address && formData.dmxFootprint && parseInt(formData.dmxFootprint) > 1 && (
-                            <div className="text-xs text-[var(--text-tertiary)] -mt-3">
-                                {(() => {
-                                    const footprint = parseInt(formData.dmxFootprint) || 1;
-                                    const addrMatch = formData.address.match(/^(\d+):(\d+)$/);
-                                    if (addrMatch) {
-                                        const univ = parseInt(addrMatch[1]);
-                                        const startAddr = parseInt(addrMatch[2]);
-                                        const endAddr = startAddr + footprint - 1;
-                                        return <span className="font-mono">Range: {univ}:{startAddr} – {univ}:{endAddr}</span>;
-                                    }
-                                    return null;
-                                })()}
-                            </div>
-                        )}
                         {/* Address Overlap Warning */}
                         {addressOverlaps.length > 0 && (
                             <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-2 -mt-2">
@@ -439,21 +504,7 @@ export function InstrumentDetail() {
                             </div>
                         )}
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Position</label>
-                                <input name="position" value={formData.position || ''} onChange={handleChange} className="panel-input" autoComplete="off" list="list-position" />
-                                <datalist id="list-position">
-                                    {suggestions?.position.map(val => <option key={val} value={val} />)}
-                                </datalist>
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Unit #</label>
-                                <input name="unit" value={formData.unit || ''} onChange={handleChange} className="panel-input" autoComplete="off" />
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-col gap-1.5 mb-2">
                             <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Purpose</label>
                             <input name="purpose" value={formData.purpose || ''} onChange={handleChange} className="panel-input" autoComplete="off" list="list-purpose" />
                             <datalist id="list-purpose">
@@ -461,64 +512,65 @@ export function InstrumentDetail() {
                             </datalist>
                         </div>
 
+                        <div className="flex gap-4">
+                            <div className="flex-1 flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Position</label>
+                                <input name="position" value={formData.position || ''} onChange={handleChange} className="panel-input" autoComplete="off" list="list-position" />
+                                <datalist id="list-position">
+                                    {suggestions?.position.map(val => <option key={val} value={val} />)}
+                                </datalist>
+                            </div>
+                            <div className="w-20 flex flex-col gap-1.5 shrink-0">
+                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Unit #</label>
+                                <input name="unit" value={formData.unit || ''} onChange={handleChange} className="panel-input text-center" autoComplete="off" />
+                            </div>
+                        </div>
+
                         <div className="h-px bg-[var(--border-subtle)] my-2"></div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="flex flex-col gap-1.5">
+                        <div className="grid grid-cols-4 gap-4 mb-4">
+                            <div className="col-span-2 flex flex-col gap-1.5 relative">
                                 <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Type</label>
-                                <div className="flex gap-2">
-                                    <input name="type" value={formData.type || ''} onChange={handleChange} className="panel-input flex-1" autoComplete="off" list="list-type" />
-                                    {fixtureLibrary.length > 0 && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowFixturePopulate(true)}
-                                            className="px-2 py-1 text-xs bg-[var(--bg-hover)] border border-[var(--border-subtle)] rounded hover:border-[var(--accent-primary)] text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors"
-                                            title="Populate from GDTF fixture library"
-                                        >
-                                            GDTF
-                                        </button>
-                                    )}
-                                </div>
+                                {fixtureLibrary.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowFixturePopulate(true)}
+                                        className="absolute top-0 right-0 px-1 py-0 text-[7px] leading-none bg-[var(--bg-hover)] border border-[var(--border-subtle)] rounded-sm hover:border-[var(--accent-primary)] text-[var(--text-tertiary)] hover:text-[var(--accent-primary)] transition-colors uppercase tracking-tight font-bold"
+                                        title="Populate from GDTF fixture library"
+                                    >
+                                        GDTF
+                                    </button>
+                                )}
+                                <input name="type" value={formData.type || ''} onChange={handleChange} className="panel-input w-full" autoComplete="off" list="list-type" />
                                 <datalist id="list-type">
                                     {suggestions?.type.map(val => <option key={val} value={val} />)}
                                 </datalist>
                             </div>
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Wattage</label>
-                                <input name="watt" value={formData.watt || ''} onChange={handleChange} className="panel-input" autoComplete="off" />
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Weight</label>
-                                <input name="weight" value={formData.weight || ''} onChange={handleChange} placeholder="kg" className="panel-input" autoComplete="off" />
+
+                            <div className="col-span-2 flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Color</label>
+                                <div className="flex-1 flex items-center gap-2">
+                                    <div className="flex-1">
+                                        <input name="color" value={formData.color || ''} onChange={handleChange} className="panel-input w-full" autoComplete="off" />
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <ColorSwatch color={formData.color} className="w-6 h-6 border-[var(--border-subtle)]" rounded="rounded-md" />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowColorPicker(true)}
+                                            className="p-1.5 rounded-md bg-[var(--bg-hover)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)] transition-colors"
+                                            title="Open Color Picker"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Color</label>
-                                <div className="relative w-full flex items-center gap-1">
-                                    <div className="relative w-full">
-                                        <input name="color" value={formData.color || ''} onChange={handleChange} className="panel-input pl-8 w-full" autoComplete="off" />
-                                        <div className="absolute left-2 top-1/2 -translate-y-1/2">
-                                            <ColorSwatch color={formData.color} className="w-4 h-4" />
-                                        </div>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowColorPicker(true)}
-                                        className="p-1.5 rounded-md bg-[var(--bg-hover)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)] transition-colors"
-                                        title="Open Color Picker"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Frame Size</label>
-                                <input name="gelFrameSize" value={formData.gelFrameSize || ''} onChange={handleChange} placeholder="e.g. 7.5" className="panel-input w-full" autoComplete="off" />
-                            </div>
+                        <div className="grid grid-cols-3 gap-4 mb-4">
                             <div className="flex flex-col gap-1.5">
                                 <div className="flex items-center gap-1">
                                     <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Gobo</label>
@@ -530,7 +582,6 @@ export function InstrumentDetail() {
                                             >
                                                 ?
                                             </button>
-                                            {/* Gobo Wheel Hover Tooltip */}
                                             <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover:block">
                                                 <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-lg shadow-xl p-3 w-72 max-h-80 overflow-auto">
                                                     <div className="text-xs font-medium text-[var(--text-primary)] mb-2">
@@ -567,11 +618,72 @@ export function InstrumentDetail() {
                                 </div>
                                 <input name="gobo" value={formData.gobo || ''} onChange={handleChange} className="panel-input w-full" autoComplete="off" />
                             </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Accessory</label>
+                                <input name="accessory" value={formData.accessory || ''} onChange={handleChange} className="panel-input" autoComplete="off" />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Wattage</label>
+                                <input name="watt" value={formData.watt || ''} onChange={handleChange} className="panel-input" autoComplete="off" />
+                            </div>
                         </div>
 
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Accessory</label>
-                            <input name="accessory" value={formData.accessory || ''} onChange={handleChange} className="panel-input" autoComplete="off" />
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Frame Size</label>
+                                <input name="gelFrameSize" value={formData.gelFrameSize || ''} onChange={handleChange} placeholder="e.g. 7.5" className="panel-input w-full" autoComplete="off" />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <div className="flex items-center gap-1">
+                                    <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">DMX Footprint</label>
+                                    {linkedFixture && linkedFixture.dmxModes?.length > 0 && (
+                                        <div className="relative group">
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowDmxMap(true)}
+                                                className="w-4 h-4 text-[10px] font-bold rounded-full bg-[var(--bg-hover)] border border-[var(--border-subtle)] text-[var(--text-tertiary)] hover:text-[var(--accent-primary)] hover:border-[var(--accent-primary)] transition-colors flex items-center justify-center leading-none cursor-help"
+                                            >
+                                                ?
+                                            </button>
+                                            {/* Hover Tooltip */}
+                                            <div className="absolute bottom-full left-0 mb-1 z-50 hidden group-hover:block">
+                                                <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-lg shadow-xl p-3 w-64 max-h-64 overflow-auto">
+                                                    <div className="text-xs font-medium text-[var(--text-primary)] mb-2">
+                                                        {linkedFixture.name} - DMX Map
+                                                    </div>
+                                                    {linkedFixture.dmxModes.slice(0, 1).map((mode, modeIdx) => (
+                                                        <div key={modeIdx}>
+                                                            <div className="text-[10px] text-[var(--accent-primary)] mb-1">{mode.name} ({mode.footprint}ch)</div>
+                                                            {mode.channels && mode.channels.length > 0 ? (
+                                                                <div className="space-y-0.5">
+                                                                    {mode.channels.map((ch, idx) => (
+                                                                        <div key={idx} className="flex text-[10px] font-mono">
+                                                                            <span className="w-6 text-[var(--accent-primary)]">{ch.dmxAddress}</span>
+                                                                            <span className="text-[var(--text-secondary)] flex-1">{ch.attribute}</span>
+                                                                            {ch.resolution && <span className="text-[var(--text-tertiary)]">{ch.resolution}</span>}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-[10px] text-[var(--text-tertiary)] italic">No channel data</div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                <input name="dmxFootprint" value={formData.dmxFootprint || ''} onChange={handleChange} placeholder="Ch" className="font-mono panel-input" autoComplete="off" />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Weight</label>
+                                <input name="weight" value={formData.weight || ''} onChange={handleChange} placeholder="kg" className="panel-input" autoComplete="off" />
+                            </div>
                         </div>
 
                         {/* Custom Fields Section */}
@@ -677,7 +789,7 @@ export function InstrumentDetail() {
                         </div>
                     </div>
                 )}
-            </div>
+            </div >
 
             {/* Duplicate Channel Confirmation Modal */}
             {
@@ -724,159 +836,164 @@ export function InstrumentDetail() {
                 )
             }
             {/* GDTF Fixture Selection Modal */}
-            {showFixturePopulate && (
-                <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-lg shadow-2xl p-6 w-full max-w-md max-h-[70vh] flex flex-col">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-bold text-[var(--text-primary)]">Select GDTF Fixture</h2>
-                            <button
-                                onClick={() => setShowFixturePopulate(false)}
-                                className="p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-                        <p className="text-sm text-[var(--text-secondary)] mb-4">
-                            Select a fixture to populate Type, Wattage, Weight, and DMX Footprint from GDTF data.
-                        </p>
-                        <div className="flex-1 overflow-auto space-y-2">
-                            {fixtureLibrary.map(fixture => {
-                                const defaultMode = fixture.dmxModes?.[0];
-                                const footprint = defaultMode?.footprint || defaultMode?.channelCount || '';
-                                return (
-                                    <button
-                                        key={fixture.id}
-                                        type="button"
-                                        onClick={() => {
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                fixtureTypeId: fixture.fixtureTypeId,
-                                                type: fixture.name || prev.type,
-                                                watt: fixture.wattage || prev.watt,
-                                                weight: fixture.weight || prev.weight,
-                                                dmxFootprint: footprint || prev.dmxFootprint,
-                                            }));
-                                            setShowFixturePopulate(false);
-                                        }}
-                                        className={`w-full p-3 text-left rounded-lg border transition-colors ${formData.fixtureTypeId === fixture.fixtureTypeId
-                                            ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]'
-                                            : 'bg-[var(--bg-panel)] border-[var(--border-subtle)] hover:border-[var(--text-tertiary)]'
-                                            }`}
-                                    >
-                                        <div className="font-medium text-[var(--text-primary)]">{fixture.name}</div>
-                                        <div className="text-xs text-[var(--text-secondary)]">{fixture.manufacturer}</div>
-                                        <div className="flex gap-4 mt-1 text-xs font-mono">
-                                            {fixture.wattage > 0 && (
-                                                <span className="text-[var(--accent-primary)]">{fixture.wattage}W</span>
-                                            )}
-                                            {footprint > 0 && (
-                                                <span className="text-[var(--text-tertiary)]">{footprint}ch DMX</span>
-                                            )}
-                                        </div>
-                                    </button>
-                                )
-                            })}
-                            {fixtureLibrary.length === 0 && (
-                                <div className="text-center py-8 text-[var(--text-tertiary)]">
-                                    <p>No fixtures in library.</p>
-                                    <p className="text-xs mt-2">Import GDTF files from the Fixture Library page.</p>
-                                </div>
-                            )}
-                        </div>
-                        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
-                            <button
-                                type="button"
-                                onClick={() => setShowFixturePopulate(false)}
-                                className="w-full py-2 text-sm text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
-                            >
-                                Cancel
-                            </button>
+            {
+                showFixturePopulate && (
+                    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-lg shadow-2xl p-6 w-full max-w-md max-h-[70vh] flex flex-col">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-lg font-bold text-[var(--text-primary)]">Select GDTF Fixture</h2>
+                                <button
+                                    onClick={() => setShowFixturePopulate(false)}
+                                    className="p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <p className="text-sm text-[var(--text-secondary)] mb-4">
+                                Select a fixture to populate Type, Wattage, Weight, and DMX Footprint from GDTF data.
+                            </p>
+                            <div className="flex-1 overflow-auto space-y-2">
+                                {fixtureLibrary.map(fixture => {
+                                    const defaultMode = fixture.dmxModes?.[0];
+                                    const footprint = defaultMode?.footprint || defaultMode?.channelCount || '';
+                                    return (
+                                        <button
+                                            key={fixture.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    fixtureTypeId: fixture.fixtureTypeId,
+                                                    type: fixture.name || prev.type,
+                                                    watt: fixture.wattage || prev.watt,
+                                                    weight: fixture.weight || prev.weight,
+                                                    dmxFootprint: footprint || prev.dmxFootprint,
+                                                }));
+                                                setShowFixturePopulate(false);
+                                            }}
+                                            className={`w-full p-3 text-left rounded-lg border transition-colors ${formData.fixtureTypeId === fixture.fixtureTypeId
+                                                ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]'
+                                                : 'bg-[var(--bg-panel)] border-[var(--border-subtle)] hover:border-[var(--text-tertiary)]'
+                                                }`}
+                                        >
+                                            <div className="font-medium text-[var(--text-primary)]">{fixture.name}</div>
+                                            <div className="text-xs text-[var(--text-secondary)]">{fixture.manufacturer}</div>
+                                            <div className="flex gap-4 mt-1 text-xs font-mono">
+                                                {fixture.wattage > 0 && (
+                                                    <span className="text-[var(--accent-primary)]">{fixture.wattage}W</span>
+                                                )}
+                                                {footprint > 0 && (
+                                                    <span className="text-[var(--text-tertiary)]">{footprint}ch DMX</span>
+                                                )}
+                                            </div>
+                                        </button>
+                                    )
+                                })}
+                                {fixtureLibrary.length === 0 && (
+                                    <div className="text-center py-8 text-[var(--text-tertiary)]">
+                                        <p>No fixtures in library.</p>
+                                        <p className="text-xs mt-2">Import GDTF files from the Fixture Library page.</p>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowFixturePopulate(false)}
+                                    className="w-full py-2 text-sm text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )
+                )
             }
             {/* DMX Map Modal */}
-            {showDmxMap && linkedFixture && (
-                <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-lg shadow-2xl p-6 w-full max-w-lg max-h-[80vh] flex flex-col">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-bold text-[var(--text-primary)]">DMX Channel Map</h2>
-                            <button
-                                onClick={() => setShowDmxMap(false)}
-                                className="p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-                        <div className="text-sm text-[var(--text-secondary)] mb-4">
-                            <span className="font-medium text-[var(--text-primary)]">{linkedFixture.name}</span>
-                            <span className="text-[var(--text-tertiary)]"> by {linkedFixture.manufacturer}</span>
-                        </div>
-                        {linkedFixture.dmxModes?.length > 0 && (
-                            <div className="flex-1 overflow-auto">
-                                {linkedFixture.dmxModes.map((mode, modeIdx) => (
-                                    <div key={modeIdx} className="mb-4">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <span className="text-xs font-medium text-[var(--accent-primary)]">{mode.name}</span>
-                                            <span className="text-xs text-[var(--text-tertiary)]">({mode.footprint} channels)</span>
-                                        </div>
-                                        {mode.channels && mode.channels.length > 0 ? (
-                                            <div className="border border-[var(--border-subtle)] rounded overflow-hidden">
-                                                <table className="w-full text-xs">
-                                                    <thead>
-                                                        <tr className="bg-[var(--bg-panel)]">
-                                                            <th className="px-2 py-1 text-left font-medium text-[var(--text-secondary)]">DMX</th>
-                                                            <th className="px-2 py-1 text-left font-medium text-[var(--text-secondary)]">Attribute</th>
-                                                            <th className="px-2 py-1 text-left font-medium text-[var(--text-secondary)]">Resolution</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {mode.channels.map((ch, idx) => (
-                                                            <tr key={idx} className="border-t border-[var(--border-subtle)]">
-                                                                <td className="px-2 py-1 font-mono text-[var(--accent-primary)]">{ch.dmxAddress}</td>
-                                                                <td className="px-2 py-1 text-[var(--text-primary)]">{ch.attribute}</td>
-                                                                <td className="px-2 py-1 text-[var(--text-tertiary)]">{ch.resolution}</td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        ) : (
-                                            <div className="text-xs text-[var(--text-tertiary)] italic">
-                                                No detailed channel data available
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
+            {
+                showDmxMap && linkedFixture && (
+                    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-lg shadow-2xl p-6 w-full max-w-lg max-h-[80vh] flex flex-col">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-lg font-bold text-[var(--text-primary)]">DMX Channel Map</h2>
+                                <button
+                                    onClick={() => setShowDmxMap(false)}
+                                    className="p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
                             </div>
-                        )}
-                        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
-                            <button
-                                type="button"
-                                onClick={() => setShowDmxMap(false)}
-                                className="w-full py-2 text-sm text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
-                            >
-                                Close
-                            </button>
+                            <div className="text-sm text-[var(--text-secondary)] mb-4">
+                                <span className="font-medium text-[var(--text-primary)]">{linkedFixture.name}</span>
+                                <span className="text-[var(--text-tertiary)]"> by {linkedFixture.manufacturer}</span>
+                            </div>
+                            {linkedFixture.dmxModes?.length > 0 && (
+                                <div className="flex-1 overflow-auto">
+                                    {linkedFixture.dmxModes.map((mode, modeIdx) => (
+                                        <div key={modeIdx} className="mb-4">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-xs font-medium text-[var(--accent-primary)]">{mode.name}</span>
+                                                <span className="text-xs text-[var(--text-tertiary)]">({mode.footprint} channels)</span>
+                                            </div>
+                                            {mode.channels && mode.channels.length > 0 ? (
+                                                <div className="border border-[var(--border-subtle)] rounded overflow-hidden">
+                                                    <table className="w-full text-xs">
+                                                        <thead>
+                                                            <tr className="bg-[var(--bg-panel)]">
+                                                                <th className="px-2 py-1 text-left font-medium text-[var(--text-secondary)]">DMX</th>
+                                                                <th className="px-2 py-1 text-left font-medium text-[var(--text-secondary)]">Attribute</th>
+                                                                <th className="px-2 py-1 text-left font-medium text-[var(--text-secondary)]">Resolution</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {mode.channels.map((ch, idx) => (
+                                                                <tr key={idx} className="border-t border-[var(--border-subtle)]">
+                                                                    <td className="px-2 py-1 font-mono text-[var(--accent-primary)]">{ch.dmxAddress}</td>
+                                                                    <td className="px-2 py-1 text-[var(--text-primary)]">{ch.attribute}</td>
+                                                                    <td className="px-2 py-1 text-[var(--text-tertiary)]">{ch.resolution}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ) : (
+                                                <div className="text-xs text-[var(--text-tertiary)] italic">
+                                                    No detailed channel data available
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDmxMap(false)}
+                                    className="w-full py-2 text-sm text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+                                >
+                                    Close
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
             {/* Color Picker Modal */}
-            {showColorPicker && (
-                <ColorPicker
-                    onClose={() => setShowColorPicker(false)}
-                    onSelect={(colorCode) => {
-                        setFormData(prev => ({ ...prev, color: colorCode }));
-                        setShowColorPicker(false);
-                    }}
-                />
-            )}
+            {
+                showColorPicker && (
+                    <ColorPicker
+                        onClose={() => setShowColorPicker(false)}
+                        onSelect={(colorCode) => {
+                            setFormData(prev => ({ ...prev, color: colorCode }));
+                            setShowColorPicker(false);
+                        }}
+                    />
+                )
+            }
         </div >
     );
 }

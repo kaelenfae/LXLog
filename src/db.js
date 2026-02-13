@@ -37,9 +37,12 @@ export const getInstrumentNotes = async (instrumentId) => {
  * @param {boolean} merge - Whether to merge with existing data or clear first
  */
 export const saveInstruments = async (instruments, merge = false) => {
-    return await db.transaction('rw', db.instruments, async () => {
+    return await db.transaction('rw', db.instruments, db.eosTargets, db.fixtureLibrary, db.instrumentNotes, async () => {
         if (!merge) {
             await db.instruments.clear();
+            await db.eosTargets.clear();
+            await db.fixtureLibrary.clear();
+            await db.instrumentNotes.clear();
             await db.instruments.bulkAdd(instruments);
         } else {
             for (const inst of instruments) {
@@ -140,8 +143,11 @@ export const importShow = async (jsonString) => {
             throw new Error("Invalid show file format");
         }
 
-        await db.transaction('rw', db.instruments, db.showMetadata, async () => {
+        await db.transaction('rw', [db.instruments, db.showMetadata, db.eosTargets, db.fixtureLibrary, db.instrumentNotes], async () => {
             await db.instruments.clear();
+            await db.eosTargets.clear();
+            await db.fixtureLibrary.clear();
+            await db.instrumentNotes.clear();
             await db.instruments.bulkAdd(data.instruments);
 
             if (data.metadata) {
@@ -163,8 +169,11 @@ export const resetShow = async () => {
 };
 
 export const createNewShow = async (metadata) => {
-    await db.transaction('rw', db.instruments, db.showMetadata, async () => {
+    await db.transaction('rw', [db.instruments, db.showMetadata, db.eosTargets, db.fixtureLibrary, db.instrumentNotes], async () => {
         await db.instruments.clear();
+        await db.eosTargets.clear();
+        await db.fixtureLibrary.clear();
+        await db.instrumentNotes.clear();
         await db.showMetadata.clear();
         await db.showMetadata.add(metadata);
     });
@@ -280,10 +289,12 @@ export const importEosCsv = async (csvString, merge = false) => {
         }
 
         // === Save to Database ===
-        await db.transaction('rw', db.instruments, db.eosTargets, async () => {
+        await db.transaction('rw', [db.instruments, db.eosTargets, db.fixtureLibrary, db.instrumentNotes], async () => {
             if (!merge) {
                 await db.instruments.clear();
                 await db.eosTargets.clear();
+                await db.fixtureLibrary.clear();
+                await db.instrumentNotes.clear();
             }
 
             // Save instruments

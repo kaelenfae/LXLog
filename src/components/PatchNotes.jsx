@@ -3,6 +3,20 @@ import { useNavigate } from 'react-router-dom';
 
 const PATCH_NOTES = [
     {
+        version: "0.3.5",
+        date: "2026-02-13",
+        title: "Integrity & UI Refinements",
+        changes: [
+            "Data Integrity: Auto-clear EOS targets and GDTF library on New Show/Import.",
+            "UI Refinement: Moved Collapse button to Detail Panel header and removed redundant icons.",
+            "UI Refinement: Standardized GDTF population button size and Color swatch positioning.",
+            "Address Enhancements: Added DMX footprint range display to Schedule list.",
+            "Address Enhancements: Consistent Universe Separator behavior across the app.",
+            "Bug Fix: Preventing 'Enter' key from prematurely closing the detail panel.",
+            "Bug Fix: Resolved issue saving and creating new instruments."
+        ]
+    },
+    {
         version: "0.3.1",
         date: "2026-02-01",
         title: "Open Source & Deployment",

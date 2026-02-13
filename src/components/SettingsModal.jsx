@@ -5,6 +5,29 @@ import classNames from 'classnames';
 import { useSettings } from '../hooks/useSettings';
 import { version } from '../../package.json';
 
+// Theme presets with display colors for preview cards
+const THEME_PRESETS = [
+    { id: 'dark', name: 'Dark', bg: '#0f0f12', panel: '#16161a', accent: '#6366f1' },
+    { id: 'light', name: 'Light', bg: '#fdf2f0', panel: '#fffafa', accent: '#8b5cf6' },
+    { id: 'midnight', name: 'Midnight', bg: '#0a0e1a', panel: '#101728', accent: '#3b82f6' },
+    { id: 'forest', name: 'Forest', bg: '#0a120e', panel: '#0f1a14', accent: '#10b981' },
+    { id: 'sunset', name: 'Sunset', bg: '#1a1410', panel: '#241c16', accent: '#f97316' },
+    { id: 'ocean', name: 'Ocean', bg: '#0a1214', panel: '#0e1a1e', accent: '#06b6d4' },
+    { id: 'lavender', name: 'Lavender', bg: '#1a1420', panel: '#221a2a', accent: '#a855f7' },
+    { id: 'hotpink', name: 'Hot Pink', bg: '#ff1493', panel: '#ff69b4', accent: '#ff00ff' },
+    { id: 'snes', name: 'SNES', bg: '#2a2a34', panel: '#34343e', accent: '#7a72b0' },
+    { id: 'colorblind', name: 'Colorblind', bg: '#0f1214', panel: '#161a1e', accent: '#ee7733' },
+];
+
+const DEFAULT_CUSTOM_COLORS = {
+    '--bg-app': '#1a1a2e',
+    '--bg-panel': '#16213e',
+    '--bg-card': '#0f3460',
+    '--accent-primary': '#e94560',
+    '--text-primary': '#f4f4f5',
+    '--text-secondary': '#a1a1aa',
+};
+
 export function SettingsModal({ onClose }) {
     const [activeTab, setActiveTab] = useState('show');
     const metadata = useLiveQuery(() => db.showMetadata.toArray());
@@ -29,6 +52,12 @@ export function SettingsModal({ onClose }) {
     // Unit System
     const [unitSystem, setUnitSystem] = useState(currentSettings.unitSystem || 'ft');
 
+    // Universe Separator
+    const [universeSeparator, setUniverseSeparator] = useState(currentSettings.universeSeparator || ':');
+
+    // Show Cells (for multicell fixtures)
+    const [showCells, setShowCells] = useState(currentSettings.showCells !== false);
+
     // Custom Fields state
     const [customFieldDefs, setCustomFieldDefs] = useState([]);
 
@@ -36,22 +65,73 @@ export function SettingsModal({ onClose }) {
     const [appVersion, setAppVersion] = useState(version);
     const [cleanupMessage, setCleanupMessage] = useState(null);
     const [originalTheme] = useState(currentSettings.theme); // Store original for cancel
+    const [originalCustomColors] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('customTheme')) || DEFAULT_CUSTOM_COLORS; }
+        catch { return DEFAULT_CUSTOM_COLORS; }
+    });
+
+    // Custom Theme Colors
+    const [customThemeColors, setCustomThemeColors] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('customTheme')) || DEFAULT_CUSTOM_COLORS; }
+        catch { return DEFAULT_CUSTOM_COLORS; }
+    });
 
     // Theme class names for applying to HTML (dyslexic is now separate)
     const THEME_CLASSES = ['light', 'midnight', 'forest', 'sunset', 'ocean', 'lavender', 'hotpink', 'snes', 'colorblind'];
 
-    // Live theme preview - apply theme immediately when dropdown changes
+    // Live theme preview - apply theme immediately when selection changes
     useEffect(() => {
         document.documentElement.classList.remove(...THEME_CLASSES);
-        if (theme !== 'dark') {
+        // Clear any custom CSS variables first
+        Object.keys(DEFAULT_CUSTOM_COLORS).forEach(key => {
+            document.documentElement.style.removeProperty(key);
+        });
+        // Also clear derived custom vars
+        document.documentElement.style.removeProperty('--accent-hover');
+        document.documentElement.style.removeProperty('--accent-text');
+        document.documentElement.style.removeProperty('--bg-hover');
+        document.documentElement.style.removeProperty('--border-subtle');
+        document.documentElement.style.removeProperty('--border-default');
+
+        if (theme === 'custom') {
+            // Apply custom CSS variables
+            Object.entries(customThemeColors).forEach(([key, value]) => {
+                document.documentElement.style.setProperty(key, value);
+            });
+            // Derive some extra vars from the custom colors
+            document.documentElement.style.setProperty('--accent-hover', customThemeColors['--accent-primary']);
+            document.documentElement.style.setProperty('--accent-text', '#ffffff');
+            document.documentElement.style.setProperty('--bg-hover', customThemeColors['--bg-card']);
+            document.documentElement.style.setProperty('--border-subtle', customThemeColors['--bg-card']);
+            document.documentElement.style.setProperty('--border-default', customThemeColors['--text-secondary'] + '44');
+        } else if (theme !== 'dark') {
             document.documentElement.classList.add(theme);
         }
-    }, [theme]);
+    }, [theme, customThemeColors]);
 
     // Restore original theme if modal is closed without saving
     const handleClose = () => {
         document.documentElement.classList.remove(...THEME_CLASSES);
-        if (originalTheme !== 'dark') {
+        // Clear any custom CSS variables
+        Object.keys(DEFAULT_CUSTOM_COLORS).forEach(key => {
+            document.documentElement.style.removeProperty(key);
+        });
+        document.documentElement.style.removeProperty('--accent-hover');
+        document.documentElement.style.removeProperty('--accent-text');
+        document.documentElement.style.removeProperty('--bg-hover');
+        document.documentElement.style.removeProperty('--border-subtle');
+        document.documentElement.style.removeProperty('--border-default');
+
+        if (originalTheme === 'custom') {
+            Object.entries(originalCustomColors).forEach(([key, value]) => {
+                document.documentElement.style.setProperty(key, value);
+            });
+            document.documentElement.style.setProperty('--accent-hover', originalCustomColors['--accent-primary']);
+            document.documentElement.style.setProperty('--accent-text', '#ffffff');
+            document.documentElement.style.setProperty('--bg-hover', originalCustomColors['--bg-card']);
+            document.documentElement.style.setProperty('--border-subtle', originalCustomColors['--bg-card']);
+            document.documentElement.style.setProperty('--border-default', originalCustomColors['--text-secondary'] + '44');
+        } else if (originalTheme !== 'dark') {
             document.documentElement.classList.add(originalTheme);
         }
         onClose();
@@ -118,6 +198,15 @@ export function SettingsModal({ onClose }) {
         // Unit System
         localStorage.setItem('unitSystem', unitSystem);
 
+        // Universe Separator
+        localStorage.setItem('universeSeparator', universeSeparator);
+        localStorage.setItem('showCells', showCells);
+
+        // Custom Theme
+        if (theme === 'custom') {
+            localStorage.setItem('customTheme', JSON.stringify(customThemeColors));
+        }
+
         // Report Settings (if modified)
         if (formData.reportFooter !== undefined) localStorage.setItem('reportFooter', formData.reportFooter);
         if (formData.showDateInFooter !== undefined) localStorage.setItem('showDateInFooter', formData.showDateInFooter);
@@ -154,7 +243,7 @@ export function SettingsModal({ onClose }) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-[var(--bg-panel)] w-full max-w-2xl rounded-lg shadow-2xl border border-[var(--border-subtle)] overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="flex border-b border-[var(--border-subtle)] overflow-x-auto">
-                    {['show', 'reports', 'interface', 'accessibility', 'fields', 'danger'].map(tab => (
+                    {['show', 'reports', 'interface', 'theme', 'accessibility', 'fields', 'danger'].map(tab => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
@@ -165,7 +254,7 @@ export function SettingsModal({ onClose }) {
                                     : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
                             )}
                         >
-                            {tab === 'danger' ? 'DB' : tab === 'fields' ? 'Fields' : tab === 'accessibility' ? 'A11y' : tab === 'show' ? 'Show' : tab}
+                            {tab === 'danger' ? 'DB' : tab === 'fields' ? 'Fields' : tab === 'accessibility' ? 'A11y' : tab === 'show' ? 'Show' : tab === 'theme' ? 'Theme' : tab}
                         </button>
                     ))}
                 </div>
@@ -283,22 +372,28 @@ export function SettingsModal({ onClose }) {
                                         <div className="font-semibold">Address Format</div>
                                         <div className="text-xs text-[var(--text-secondary)]">Universe:Address vs Absolute</div>
                                     </div>
-                                    <div className="flex bg-gray-700 rounded-lg p-0.5">
+                                    <div className="flex bg-gray-700 rounded-lg p-0.5 relative z-10">
                                         <button
-                                            onClick={() => setAddressMode('universe')}
-                                            className={classNames("px-3 py-1 text-xs rounded-md transition-all font-medium", {
-                                                "bg-[var(--accent-primary)] text-white shadow": addressMode === 'universe',
-                                                "text-gray-400 hover:text-white": addressMode !== 'universe'
-                                            })}
+                                            type="button"
+                                            onClick={(e) => { e.preventDefault(); setAddressMode('universe'); }}
+                                            className="px-3 py-1 text-xs rounded-md transition-all font-medium cursor-pointer relative z-20"
+                                            style={{
+                                                backgroundColor: addressMode === 'universe' ? '#4f46e5' : 'transparent',
+                                                color: addressMode === 'universe' ? 'white' : '#9ca3af',
+                                                boxShadow: addressMode === 'universe' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)' : 'none'
+                                            }}
                                         >
                                             Univ:Addr
                                         </button>
                                         <button
-                                            onClick={() => setAddressMode('absolute')}
-                                            className={classNames("px-3 py-1 text-xs rounded-md transition-all font-medium", {
-                                                "bg-[var(--accent-primary)] text-white shadow": addressMode === 'absolute',
-                                                "text-gray-400 hover:text-white": addressMode !== 'absolute'
-                                            })}
+                                            type="button"
+                                            onClick={(e) => { e.preventDefault(); setAddressMode('absolute'); }}
+                                            className="px-3 py-1 text-xs rounded-md transition-all font-medium cursor-pointer relative z-20"
+                                            style={{
+                                                backgroundColor: addressMode === 'absolute' ? '#4f46e5' : 'transparent',
+                                                color: addressMode === 'absolute' ? 'white' : '#9ca3af',
+                                                boxShadow: addressMode === 'absolute' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)' : 'none'
+                                            }}
                                         >
                                             Absolute
                                         </button>
@@ -312,22 +407,28 @@ export function SettingsModal({ onClose }) {
                                         <div className="font-semibold">Channel Defaults</div>
                                         <div className="text-xs text-[var(--text-secondary)]">Multi-part or Duplicate</div>
                                     </div>
-                                    <div className="flex bg-gray-700 rounded-lg p-0.5">
+                                    <div className="flex bg-gray-700 rounded-lg p-0.5 relative z-10">
                                         <button
-                                            onClick={() => setChannelDisplayMode('parts')}
-                                            className={classNames("px-3 py-1 text-xs rounded-md transition-all font-medium", {
-                                                "bg-[var(--accent-primary)] text-white shadow": channelDisplayMode === 'parts',
-                                                "text-gray-400 hover:text-white": channelDisplayMode !== 'parts'
-                                            })}
+                                            type="button"
+                                            onClick={(e) => { e.preventDefault(); setChannelDisplayMode('parts'); }}
+                                            className="px-3 py-1 text-xs rounded-md transition-all font-medium cursor-pointer relative z-20"
+                                            style={{
+                                                backgroundColor: channelDisplayMode === 'parts' ? '#4f46e5' : 'transparent',
+                                                color: channelDisplayMode === 'parts' ? 'white' : '#9ca3af',
+                                                boxShadow: channelDisplayMode === 'parts' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)' : 'none'
+                                            }}
                                         >
                                             Parts
                                         </button>
                                         <button
-                                            onClick={() => setChannelDisplayMode('duplicates')}
-                                            className={classNames("px-3 py-1 text-xs rounded-md transition-all font-medium", {
-                                                "bg-[var(--accent-primary)] text-white shadow": channelDisplayMode === 'duplicates',
-                                                "text-gray-400 hover:text-white": channelDisplayMode !== 'duplicates'
-                                            })}
+                                            type="button"
+                                            onClick={(e) => { e.preventDefault(); setChannelDisplayMode('duplicates'); }}
+                                            className="px-3 py-1 text-xs rounded-md transition-all font-medium cursor-pointer relative z-20"
+                                            style={{
+                                                backgroundColor: channelDisplayMode === 'duplicates' ? '#4f46e5' : 'transparent',
+                                                color: channelDisplayMode === 'duplicates' ? 'white' : '#9ca3af',
+                                                boxShadow: channelDisplayMode === 'duplicates' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)' : 'none'
+                                            }}
                                         >
                                             Duplicates
                                         </button>
@@ -338,8 +439,8 @@ export function SettingsModal({ onClose }) {
 
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <div className="font-semibold">Formatting</div>
-                                        <div className="text-xs text-[var(--text-secondary)]">Always show Universe 1 (e.g. "1:1" vs "1")</div>
+                                        <div className="font-semibold">Always Show Universe 1</div>
+                                        <div className="text-xs text-[var(--text-secondary)]">Display "1:1" instead of just "1"</div>
                                     </div>
                                     <label className="relative inline-flex items-center cursor-pointer">
                                         <input type="checkbox" checked={showUniverse1} onChange={e => setShowUniverse1(e.target.checked)} className="sr-only peer" />
@@ -354,57 +455,169 @@ export function SettingsModal({ onClose }) {
                                         <div className="font-semibold">Unit System</div>
                                         <div className="text-xs text-[var(--text-secondary)]">Choose feet or meters for distances</div>
                                     </div>
-                                    <div className="flex rounded-md bg-[var(--bg-app)] border border-[var(--border-subtle)] p-1 gap-1">
+                                    <div className="flex rounded-md bg-[var(--bg-app)] border border-[var(--border-subtle)] p-1 gap-1 relative z-10">
                                         <button
                                             type="button"
-                                            onClick={() => setUnitSystem('ft')}
-                                            className={classNames("px-3 py-1 text-xs rounded-md transition-all font-medium", {
-                                                "bg-[var(--accent-primary)] text-white shadow": unitSystem === 'ft',
-                                                "text-gray-400 hover:text-white": unitSystem !== 'ft'
-                                            })}
+                                            onClick={(e) => { e.preventDefault(); setUnitSystem('ft'); }}
+                                            className="px-3 py-1 text-xs rounded-md transition-all font-medium cursor-pointer relative z-20"
+                                            style={{
+                                                backgroundColor: unitSystem === 'ft' ? '#4f46e5' : 'transparent',
+                                                color: unitSystem === 'ft' ? 'white' : '#9ca3af',
+                                                boxShadow: unitSystem === 'ft' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)' : 'none'
+                                            }}
                                         >
                                             Feet (ft)
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => setUnitSystem('m')}
-                                            className={classNames("px-3 py-1 text-xs rounded-md transition-all font-medium", {
-                                                "bg-[var(--accent-primary)] text-white shadow": unitSystem === 'm',
-                                                "text-gray-400 hover:text-white": unitSystem !== 'm'
-                                            })}
+                                            onClick={(e) => { e.preventDefault(); setUnitSystem('m'); }}
+                                            className="px-3 py-1 text-xs rounded-md transition-all font-medium cursor-pointer relative z-20"
+                                            style={{
+                                                backgroundColor: unitSystem === 'm' ? '#4f46e5' : 'transparent',
+                                                color: unitSystem === 'm' ? 'white' : '#9ca3af',
+                                                boxShadow: unitSystem === 'm' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)' : 'none'
+                                            }}
                                         >
                                             Meters (m)
                                         </button>
                                     </div>
                                 </div>
+
+                                <div className="h-px bg-[var(--border-subtle)]"></div>
+
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="font-semibold">Universe Separator</div>
+                                        <div className="text-xs text-[var(--text-secondary)]">Choose colon or slash (e.g. "2:1" vs "2/1")</div>
+                                    </div>
+                                    <div className="flex rounded-md bg-[var(--bg-app)] border border-[var(--border-subtle)] p-1 gap-1 relative z-10">
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.preventDefault(); setUniverseSeparator(':'); }}
+                                            className="px-3 py-1 text-xs rounded-md transition-all font-medium cursor-pointer relative z-20"
+                                            style={{
+                                                backgroundColor: universeSeparator === ':' ? '#4f46e5' : 'transparent',
+                                                color: universeSeparator === ':' ? 'white' : '#9ca3af',
+                                                boxShadow: universeSeparator === ':' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)' : 'none'
+                                            }}
+                                        >
+                                            MA (:)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.preventDefault(); setUniverseSeparator('/'); }}
+                                            className="px-3 py-1 text-xs rounded-md transition-all font-medium cursor-pointer relative z-20"
+                                            style={{
+                                                backgroundColor: universeSeparator === '/' ? '#4f46e5' : 'transparent',
+                                                color: universeSeparator === '/' ? 'white' : '#9ca3af',
+                                                boxShadow: universeSeparator === '/' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)' : 'none'
+                                            }}
+                                        >
+                                            ETC (/)
+                                        </button>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'theme' && (
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-bold mb-4">Theme</h3>
+
+                            {/* Preset Grid */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                {THEME_PRESETS.map(preset => (
+                                    <button
+                                        key={preset.id}
+                                        type="button"
+                                        onClick={() => setTheme(preset.id)}
+                                        className={classNames(
+                                            "relative rounded-lg p-3 text-left transition-all cursor-pointer border-2",
+                                            theme === preset.id
+                                                ? "border-[var(--accent-primary)] ring-2 ring-[var(--accent-primary)]/30"
+                                                : "border-[var(--border-subtle)] hover:border-[var(--border-default)]"
+                                        )}
+                                        style={{ backgroundColor: preset.panel }}
+                                    >
+                                        {/* Color swatch bar */}
+                                        <div className="flex gap-1 mb-2">
+                                            <div className="h-3 w-full rounded-sm" style={{ backgroundColor: preset.bg }} />
+                                            <div className="h-3 w-full rounded-sm" style={{ backgroundColor: preset.accent }} />
+                                            <div className="h-3 w-full rounded-sm" style={{ backgroundColor: preset.panel }} />
+                                        </div>
+                                        <div className="text-xs font-semibold" style={{ color: preset.accent }}>
+                                            {preset.name}
+                                        </div>
+                                        {theme === preset.id && (
+                                            <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ backgroundColor: preset.accent }} />
+                                        )}
+                                    </button>
+                                ))}
+
+                                {/* Custom Theme Card */}
+                                <button
+                                    type="button"
+                                    onClick={() => setTheme('custom')}
+                                    className={classNames(
+                                        "relative rounded-lg p-3 text-left transition-all cursor-pointer border-2",
+                                        theme === 'custom'
+                                            ? "border-[var(--accent-primary)] ring-2 ring-[var(--accent-primary)]/30"
+                                            : "border-[var(--border-subtle)] hover:border-[var(--border-default)]"
+                                    )}
+                                    style={{ backgroundColor: customThemeColors['--bg-panel'] }}
+                                >
+                                    <div className="flex gap-1 mb-2">
+                                        <div className="h-3 w-full rounded-sm" style={{ backgroundColor: customThemeColors['--bg-app'] }} />
+                                        <div className="h-3 w-full rounded-sm" style={{ backgroundColor: customThemeColors['--accent-primary'] }} />
+                                        <div className="h-3 w-full rounded-sm" style={{ backgroundColor: customThemeColors['--bg-card'] }} />
+                                    </div>
+                                    <div className="text-xs font-semibold" style={{ color: customThemeColors['--accent-primary'] }}>
+                                        ✦ Custom
+                                    </div>
+                                    {theme === 'custom' && (
+                                        <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ backgroundColor: customThemeColors['--accent-primary'] }} />
+                                    )}
+                                </button>
                             </div>
 
-                            <div className="p-4 bg-[var(--bg-card)] rounded border border-[var(--border-subtle)] flex items-center justify-between">
-                                <div>
-                                    <div className="font-semibold">Theme</div>
-                                    <div className="text-xs text-[var(--text-secondary)]">Choose your color scheme</div>
+                            {/* Custom Theme Builder */}
+                            {theme === 'custom' && (
+                                <div className="p-4 bg-[var(--bg-card)] rounded-lg border border-[var(--border-subtle)] space-y-3">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="font-semibold text-sm">Custom Theme Editor</h4>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCustomThemeColors(DEFAULT_CUSTOM_COLORS)}
+                                            className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+                                        >
+                                            Reset
+                                        </button>
+                                    </div>
+                                    {[
+                                        { key: '--bg-app', label: 'Background' },
+                                        { key: '--bg-panel', label: 'Panel' },
+                                        { key: '--bg-card', label: 'Card' },
+                                        { key: '--accent-primary', label: 'Accent' },
+                                        { key: '--text-primary', label: 'Text' },
+                                        { key: '--text-secondary', label: 'Secondary Text' },
+                                    ].map(({ key, label }) => (
+                                        <div key={key} className="flex items-center justify-between">
+                                            <span className="text-xs text-[var(--text-secondary)]">{label}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{customThemeColors[key]}</span>
+                                                <input
+                                                    type="color"
+                                                    value={customThemeColors[key]}
+                                                    onChange={(e) => setCustomThemeColors(prev => ({ ...prev, [key]: e.target.value }))}
+                                                    className="w-8 h-6 rounded border border-[var(--border-subtle)] cursor-pointer bg-transparent p-0"
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                                <select
-                                    value={theme}
-                                    onChange={(e) => setTheme(e.target.value)}
-                                    className="bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-1.5 text-sm min-w-[160px]"
-                                >
-                                    <optgroup label="Standard">
-                                        <option value="dark">Dark</option>
-                                        <option value="light">Light</option>
-                                        <option value="midnight">Midnight</option>
-                                        <option value="forest">Forest</option>
-                                        <option value="sunset">Sunset</option>
-                                        <option value="ocean">Ocean</option>
-                                        <option value="lavender">Lavender</option>
-                                        <option value="hotpink">Hot Pink</option>
-                                        <option value="snes">SNES</option>
-                                    </optgroup>
-                                    <optgroup label="Accessibility">
-                                        <option value="colorblind">Colorblind</option>
-                                    </optgroup>
-                                </select>
-                            </div>
+                            )}
                         </div>
                     )}
 

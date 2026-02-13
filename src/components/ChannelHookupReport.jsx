@@ -24,7 +24,7 @@ export function ChannelHookupReport() {
     const [orientation, setOrientation] = useState('portrait');
     const [showColumnConfig, setShowColumnConfig] = useState(false);
     const [showSwatches, setShowSwatches] = useState(true);
-    const { addressMode, showUniverse1 } = useSettings();
+    const { addressMode, showUniverse1, universeSeparator } = useSettings();
 
     // Column configuration state
     const [columnOrder, setColumnOrder] = useState(() => {
@@ -135,7 +135,7 @@ export function ChannelHookupReport() {
             case 'address':
                 return (
                     <td className="py-1 font-mono font-bold text-gray-800">
-                        {formatAddress(inst.address, addressMode, showUniverse1)}
+                        {formatAddress(inst.address, addressMode, showUniverse1, universeSeparator)}
                     </td>
                 );
             case 'type':

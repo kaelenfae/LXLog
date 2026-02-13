@@ -3,9 +3,10 @@
  * @param {string|number} address - The address to format (e.g. "513", "2:1", "2/1")
  * @param {string} mode - 'universe' (1:1) or 'absolute' (513)
  * @param {boolean} showUniverse1 - If true, displays "1:1" instead of "1" for universe 1
+ * @param {string} separator - The separator to use between universe and address (':' or '/')
  * @returns {string} Formatted address
  */
-export const formatAddress = (address, mode = 'universe', showUniverse1 = false) => {
+export const formatAddress = (address, mode = 'universe', showUniverse1 = false, separator = ':') => {
     if (!address) return '';
 
     const strAddr = String(address).trim();
@@ -35,6 +36,7 @@ export const formatAddress = (address, mode = 'universe', showUniverse1 = false)
     } else {
         // Universe Mode
         if (universe === 1 && !showUniverse1) return String(channel);
-        return `${universe}:${channel}`;
+        return `${universe}${separator}${channel}`;
     }
 };
+

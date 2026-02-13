@@ -11,7 +11,7 @@ export function PatchReport() {
     const [groupByType, setGroupByType] = useState(false);
 
     // Interface Settings
-    const { addressMode, showUniverse1 } = useSettings();
+    const { addressMode, showUniverse1, universeSeparator } = useSettings();
 
     const instruments = useLiveQuery(async () => {
         const all = await db.instruments.toArray();
@@ -176,7 +176,7 @@ export function PatchReport() {
 
                                     {/* Address - Prominent */}
                                     <div className="w-24 font-bold font-mono text-base text-gray-800 pl-2">
-                                        {formatAddress(inst.address, addressMode, showUniverse1) || '-'}
+                                        {formatAddress(inst.address, addressMode, showUniverse1, universeSeparator) || '-'}
                                     </div>
 
                                     {/* Type - Secondary */}

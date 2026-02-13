@@ -10,7 +10,7 @@ import { useSettings } from '../hooks/useSettings';
 export function HangingScheduleReport() {
     const [orientation, setOrientation] = React.useState('portrait');
     const [showSwatches, setShowSwatches] = React.useState(false);
-    const { addressMode, showUniverse1 } = useSettings();
+    const { addressMode, showUniverse1, universeSeparator } = useSettings();
 
     // Dynamic Columns Support
     const metadata = useLiveQuery(() => db.showMetadata.toArray());
@@ -331,7 +331,7 @@ export function HangingScheduleReport() {
                         <div className="inline-block w-16 h-5 border border-gray-400 bg-yellow-50 print:bg-white print:border-black" title="Address missing - fill in manually"></div>
                     );
                 }
-                return formatAddress(inst.address, addressMode, showUniverse1);
+                return formatAddress(inst.address, addressMode, showUniverse1, universeSeparator);
             default:
                 // Handle Focus Status as checkbox
                 if (columnId.toLowerCase().includes('focus') && columnId.toLowerCase().includes('status')) {

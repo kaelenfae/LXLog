@@ -44,8 +44,24 @@ function App() {
 
       // Remove all theme classes first
       document.documentElement.classList.remove(...THEME_CLASSES);
-      // Add the new theme class (dark uses default :root, no class needed)
-      if (theme !== 'dark') {
+
+      if (theme === 'custom') {
+        // Apply custom theme CSS variables from localStorage
+        try {
+          const customColors = JSON.parse(localStorage.getItem('customTheme'));
+          if (customColors) {
+            Object.entries(customColors).forEach(([key, value]) => {
+              document.documentElement.style.setProperty(key, value);
+            });
+            document.documentElement.style.setProperty('--accent-hover', customColors['--accent-primary']);
+            document.documentElement.style.setProperty('--accent-text', '#ffffff');
+            document.documentElement.style.setProperty('--bg-hover', customColors['--bg-card']);
+            document.documentElement.style.setProperty('--border-subtle', customColors['--bg-card']);
+            document.documentElement.style.setProperty('--border-default', customColors['--text-secondary'] + '44');
+          }
+        } catch (e) { /* ignore parse errors */ }
+      } else if (theme !== 'dark') {
+        // Add the new theme class (dark uses default :root, no class needed)
         document.documentElement.classList.add(theme);
       }
 
@@ -305,6 +321,7 @@ function AppContent({ isSidebarOpen, setIsSidebarOpen, handleLoad, handleSave, h
                 <p>Select an instrument to view details</p>
               </div>
             } />
+            <Route path="instrument/bulk" element={<InstrumentDetail />} />
             <Route path="instrument/:id" element={<InstrumentDetail />} />
           </Route>
 
