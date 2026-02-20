@@ -22,6 +22,7 @@ export function InstrumentDetail() {
 
     const [formData, setFormData] = useState({
         channel: '',
+        part: '',
         address: '',
         dmxFootprint: '',
         type: '',
@@ -37,6 +38,12 @@ export function InstrumentDetail() {
         fixtureTypeId: '',
         customFields: {}
     });
+
+    const multiPartCount = useLiveQuery(
+        () => formData.channel ? db.instruments.where('channel').equals(String(formData.channel)).count() : 0,
+        [formData.channel]
+    );
+    const isMultiPart = formData.part > 1 || multiPartCount > 1;
 
     // GDTF Fixture Library
     const fixtureLibrary = useLiveQuery(() => db.fixtureLibrary.toArray()) || [];
@@ -144,7 +151,7 @@ export function InstrumentDetail() {
         if (isBulk && bulkInstruments && bulkInstruments.length > 0) {
             // Calculate common values
             const commonData = {
-                channel: '', address: '', dmxFootprint: '', type: '', watt: '', weight: '',
+                channel: '', part: '', address: '', dmxFootprint: '', type: '', watt: '', weight: '',
                 purpose: '', position: '', unit: '', gobo: '', accessory: '', color: '',
                 gelFrameSize: '', fixtureTypeId: '', customFields: {}
             };
@@ -165,6 +172,7 @@ export function InstrumentDetail() {
         } else if (isNew) {
             setFormData({
                 channel: '',
+                part: '',
                 address: '',
                 dmxFootprint: '',
                 type: '',
@@ -182,6 +190,7 @@ export function InstrumentDetail() {
             });
         }
     }, [stableInstrument, isNew, isBulk, stableBulkInstruments]);
+
 
     // Sync address separator when setting changes or data loads
     useEffect(() => {
@@ -251,6 +260,11 @@ export function InstrumentDetail() {
 
         // Parse channel for parts (e.g., "103.1")
         const dataToSave = { ...formData };
+
+        // Ensure part is a number if it exists
+        if (dataToSave.part) {
+            dataToSave.part = parseInt(dataToSave.part, 10) || 1;
+        }
 
         // Auto-calculate Universe for addresses > 512
         if (dataToSave.address) {
@@ -458,9 +472,17 @@ export function InstrumentDetail() {
                             </div>
                         )}
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Channel</label>
-                                <input name="channel" value={formData.channel || ''} onChange={handleChange} autoFocus={!location.state?.focusField} className="font-mono text-lg font-bold text-[var(--accent-primary)] panel-input" placeholder="#" autoComplete="off" />
+                            <div className="flex gap-2">
+                                <div className="w-24 flex flex-col gap-1.5 shrink-0">
+                                    <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Channel</label>
+                                    <input name="channel" value={formData.channel || ''} onChange={handleChange} autoFocus={!location.state?.focusField} className="font-mono text-lg font-bold text-[var(--accent-primary)] panel-input text-center" placeholder="#" autoComplete="off" />
+                                </div>
+                                {isMultiPart && (
+                                    <div className="w-20 flex flex-col gap-1.5 shrink-0">
+                                        <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Part</label>
+                                        <input name="part" type="number" min="1" value={formData.part || 1} onChange={handleChange} className="font-mono text-lg font-bold text-[var(--accent-primary)] panel-input text-center p-0" autoComplete="off" />
+                                    </div>
+                                )}
                             </div>
                             <div className="flex flex-col gap-1.5 relative">
                                 <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Address</label>

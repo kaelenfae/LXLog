@@ -55,8 +55,8 @@ export function SettingsModal({ onClose }) {
     // Universe Separator
     const [universeSeparator, setUniverseSeparator] = useState(currentSettings.universeSeparator || ':');
 
-    // Show Cells (for multicell fixtures)
-    const [showCells, setShowCells] = useState(currentSettings.showCells !== false);
+    // Collapsible Show Info
+    const [showMoreShowInfo, setShowMoreShowInfo] = useState(false);
 
     // Custom Fields state
     const [customFieldDefs, setCustomFieldDefs] = useState([]);
@@ -200,7 +200,6 @@ export function SettingsModal({ onClose }) {
 
         // Universe Separator
         localStorage.setItem('universeSeparator', universeSeparator);
-        localStorage.setItem('showCells', showCells);
 
         // Custom Theme
         if (theme === 'custom') {
@@ -301,6 +300,63 @@ export function SettingsModal({ onClose }) {
                                     />
                                 </label>
                             </div>
+
+                            {showMoreShowInfo ? (
+                                <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-[var(--border-subtle)] animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <label className="block">
+                                        <span className="text-xs text-[var(--text-secondary)]">Director</span>
+                                        <input
+                                            type="text"
+                                            value={formData.director || ''}
+                                            onChange={e => setFormData({ ...formData, director: e.target.value })}
+                                            className="w-full mt-1"
+                                        />
+                                    </label>
+                                    <label className="block">
+                                        <span className="text-xs text-[var(--text-secondary)]">Producer</span>
+                                        <input
+                                            type="text"
+                                            value={formData.producer || ''}
+                                            onChange={e => setFormData({ ...formData, producer: e.target.value })}
+                                            className="w-full mt-1"
+                                        />
+                                    </label>
+                                    <label className="block">
+                                        <span className="text-xs text-[var(--text-secondary)]">Company</span>
+                                        <input
+                                            type="text"
+                                            value={formData.company || ''}
+                                            onChange={e => setFormData({ ...formData, company: e.target.value })}
+                                            className="w-full mt-1"
+                                        />
+                                    </label>
+                                    <div className="flex items-end underline">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowMoreShowInfo(false)}
+                                            className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1 font-bold"
+                                        >
+                                            SHOW LESS
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex justify-center mt-2 underline">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowMoreShowInfo(true)}
+                                        className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1 font-bold"
+                                    >
+                                        SHOW MORE
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -407,30 +463,54 @@ export function SettingsModal({ onClose }) {
                                         <div className="font-semibold">Channel Defaults</div>
                                         <div className="text-xs text-[var(--text-secondary)]">Multi-part or Duplicate</div>
                                     </div>
-                                    <div className="flex bg-gray-700 rounded-lg p-0.5 relative z-10">
+                                    <div className="flex bg-gray-700 rounded-lg p-0.5 relative z-10 flex-wrap gap-0.5">
                                         <button
                                             type="button"
                                             onClick={(e) => { e.preventDefault(); setChannelDisplayMode('parts'); }}
-                                            className="px-3 py-1 text-xs rounded-md transition-all font-medium cursor-pointer relative z-20"
+                                            className="px-2 py-1 text-[10px] rounded-md transition-all font-medium cursor-pointer relative z-20 flex-1 min-w-[60px]"
                                             style={{
                                                 backgroundColor: channelDisplayMode === 'parts' ? '#4f46e5' : 'transparent',
                                                 color: channelDisplayMode === 'parts' ? 'white' : '#9ca3af',
                                                 boxShadow: channelDisplayMode === 'parts' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)' : 'none'
                                             }}
                                         >
-                                            Parts
+                                            Parts (P1)
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={(e) => { e.preventDefault(); setChannelDisplayMode('duplicates'); }}
-                                            className="px-3 py-1 text-xs rounded-md transition-all font-medium cursor-pointer relative z-20"
+                                            onClick={(e) => { e.preventDefault(); setChannelDisplayMode('dots'); }}
+                                            className="px-2 py-1 text-[10px] rounded-md transition-all font-medium cursor-pointer relative z-20 flex-1 min-w-[60px]"
                                             style={{
-                                                backgroundColor: channelDisplayMode === 'duplicates' ? '#4f46e5' : 'transparent',
-                                                color: channelDisplayMode === 'duplicates' ? 'white' : '#9ca3af',
-                                                boxShadow: channelDisplayMode === 'duplicates' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)' : 'none'
+                                                backgroundColor: channelDisplayMode === 'dots' ? '#4f46e5' : 'transparent',
+                                                color: channelDisplayMode === 'dots' ? 'white' : '#9ca3af',
+                                                boxShadow: channelDisplayMode === 'dots' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)' : 'none'
                                             }}
                                         >
-                                            Duplicates
+                                            Dots (.1)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.preventDefault(); setChannelDisplayMode('hide'); }}
+                                            className="px-2 py-1 text-[10px] rounded-md transition-all font-medium cursor-pointer relative z-20 flex-1 min-w-[70px]"
+                                            style={{
+                                                backgroundColor: channelDisplayMode === 'hide' ? '#4f46e5' : 'transparent',
+                                                color: channelDisplayMode === 'hide' ? 'white' : '#9ca3af',
+                                                boxShadow: channelDisplayMode === 'hide' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)' : 'none'
+                                            }}
+                                        >
+                                            Hide Dups
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.preventDefault(); setChannelDisplayMode('none'); }}
+                                            className="px-2 py-1 text-[10px] rounded-md transition-all font-medium cursor-pointer relative z-20 flex-1 min-w-[70px]"
+                                            style={{
+                                                backgroundColor: channelDisplayMode === 'none' ? '#4f46e5' : 'transparent',
+                                                color: channelDisplayMode === 'none' ? 'white' : '#9ca3af',
+                                                boxShadow: channelDisplayMode === 'none' ? '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)' : 'none'
+                                            }}
+                                        >
+                                            Show Dups
                                         </button>
                                     </div>
                                 </div>
@@ -701,6 +781,25 @@ export function SettingsModal({ onClose }) {
                                         {cleanupMessage}
                                     </div>
                                 )}
+                            </div>
+
+                            <div className="p-4 border border-[var(--border-subtle)] rounded bg-[var(--bg-card)] mb-4">
+                                <h4 className="font-bold mb-2">Reset Magic Sheet</h4>
+                                <p className="text-sm text-[var(--text-secondary)] mb-1">Reset all Magic Sheet layout settings (group configs, sort orders, column counts, merged groups).</p>
+                                <p className="text-xs text-yellow-400 mb-4">Settings will be restored to defaults on next load.</p>
+                                <button onClick={() => {
+                                    if (confirm('Reset all Magic Sheet settings to defaults?')) {
+                                        localStorage.removeItem('magicSheetConfigs');
+                                        localStorage.removeItem('magicSheet_groupOrder');
+                                        localStorage.removeItem('magicSheet_groupBy');
+                                        localStorage.removeItem('magicSheet_canvasMode');
+                                        localStorage.removeItem('magicSheet_mergedGroups');
+                                        localStorage.removeItem('magicSheet_collapsedGroups');
+                                        alert('Magic Sheet settings cleared. Reload the page to see defaults.');
+                                    }
+                                }} className="bg-[var(--bg-hover)] border border-[var(--border-default)] px-4 py-2 rounded text-sm hover:text-white transition-colors">
+                                    Reset Magic Sheet Settings
+                                </button>
                             </div>
 
                             <div className="p-4 border border-red-900/30 bg-red-900/10 rounded">

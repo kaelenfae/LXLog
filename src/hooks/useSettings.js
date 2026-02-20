@@ -20,7 +20,6 @@ export function useSettings() {
         unitSystem: localStorage.getItem('unitSystem') || 'ft',
         // Universe separator (: or /)
         universeSeparator: localStorage.getItem('universeSeparator') || ':',
-        showCells: localStorage.getItem('showCells') !== 'false',
     });
 
     useEffect(() => {
@@ -44,7 +43,6 @@ export function useSettings() {
                 unitSystem: localStorage.getItem('unitSystem') || 'ft',
                 // Universe separator (: or /)
                 universeSeparator: localStorage.getItem('universeSeparator') || ':',
-                showCells: localStorage.getItem('showCells') !== 'false',
             });
         };
         window.addEventListener('settingsChanged', handleSettingsChange);

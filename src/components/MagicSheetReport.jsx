@@ -21,71 +21,29 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// --- Sortable Item Component ---
-function SortableInstrument({ id, inst, config }) {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-        isDragging
-    } = useSortable({
-        id,
-        disabled: config.isLocked // Disable drag if locked
-    });
-
-    const instColor = inst.color ? getGelColor(inst.color) : null;
-
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.3 : 1,
-        borderColor: instColor || '#9ca3af',
-        backgroundColor: instColor ? `${instColor}15` : 'white',
-    };
-
-    return (
-        <div
-            ref={setNodeRef}
-            style={style}
-            {...attributes}
-            {...listeners}
-            className={`relative flex flex-col items-center p-2 border-2 rounded-lg print:border-black overflow-hidden ${config.isLocked ? '' : 'cursor-grab active:cursor-grabbing'
-                } ${config.layoutType === 'flex' ? 'min-w-[3rem]' : ''
-                } hover:shadow-md transition-all`}
-        >
-            <div className="text-xl font-bold pointer-events-none text-black">{inst.channel}</div>
-            {inst.color && (
-                <div className="text-[8px] text-gray-600 pointer-events-none truncate max-w-[50px]">{inst.color}</div>
-            )}
-        </div>
-    );
-}
-
-// Drag Overlay Item (Preview)
-function DragOverlayItem({ inst, config }) {
-    if (!inst) return null;
+// --- Instrument Cell (non-draggable) ---
+function InstrumentCell({ inst, config }) {
     const instColor = inst.color ? getGelColor(inst.color) : null;
 
     return (
         <div
-            className={`relative flex flex-col items-center p-2 border-2 rounded-lg overflow-hidden cursor-grabbing shadow-2xl scale-105 z-50 ${config.layoutType === 'flex' ? 'min-w-[3rem]' : ''}`}
+            className="relative flex flex-col items-center p-2 print:p-1 border-2 rounded-lg print:border-black overflow-hidden hover:shadow-md transition-all"
             style={{
-                borderColor: instColor || '#6366f1',
-                backgroundColor: instColor ? `${instColor}25` : 'white',
+                borderColor: instColor || '#9ca3af',
+                backgroundColor: instColor ? `${instColor}15` : 'white',
             }}
         >
-            <div className="text-xl font-bold pointer-events-none text-black">{inst.channel}</div>
+            <div className="text-xl print:text-base font-bold pointer-events-none text-black">{inst.channel}</div>
             {inst.color && (
-                <div className="text-[8px] text-gray-600 pointer-events-none truncate max-w-[50px]">{inst.color}</div>
+                <div className="text-[8px] text-gray-600 pointer-events-none truncate max-w-[50px] print:max-w-[40px]">{inst.color}</div>
             )}
         </div>
     );
 }
 
+
 // --- Sortable Group Component ---
-function SortableGroup({ id, children, accentColor, isCollapsed, onToggleCollapse }) {
+function SortableGroup({ id, children, accentColor, isMenuOpen, onMenuClick, className: extraClassName }) {
     const {
         attributes,
         listeners,
@@ -101,12 +59,10 @@ function SortableGroup({ id, children, accentColor, isCollapsed, onToggleCollaps
         opacity: isDragging ? 0.5 : 1,
     };
 
-    // Handle click vs drag - click toggles collapse, drag initiates reorder
+    // Handle click vs drag - click opens menu, drag initiates reorder
     const handleClick = (e) => {
-        // If this was a real drag (not just a click), dnd-kit will have handled it
-        // This fires only on a click (no drag distance)
-        if (onToggleCollapse) {
-            onToggleCollapse();
+        if (onMenuClick) {
+            onMenuClick();
         }
     };
 
@@ -114,18 +70,19 @@ function SortableGroup({ id, children, accentColor, isCollapsed, onToggleCollaps
         <div
             ref={setNodeRef}
             style={style}
-            className="relative"
+            className={`relative ${extraClassName || ''}`}
         >
-            {/* Drag Handle / Collapse Toggle */}
+            {/* Drag Handle / Menu Toggle */}
             <div
                 {...attributes}
                 {...listeners}
                 onClick={handleClick}
-                className="absolute top-2 left-2 p-1.5 rounded cursor-grab active:cursor-grabbing bg-white/80 hover:bg-white shadow-sm z-10 print:hidden transition-all"
-                title={isCollapsed ? "Click to expand, drag to reorder" : "Click to collapse, drag to reorder"}
+                className={`absolute top-2 left-2 p-1.5 rounded cursor-grab active:cursor-grabbing shadow-sm z-10 print:hidden transition-all ${isMenuOpen ? 'bg-indigo-500 text-white' : 'bg-white/80 hover:bg-white text-gray-500'
+                    }`}
+                title="Click for options, drag to reorder"
             >
-                <svg className={`w-4 h-4 text-gray-500 transition-transform ${isCollapsed ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
             </div>
             {children}
@@ -151,7 +108,7 @@ export function MagicSheetReport() {
     const [orientation, setOrientation] = React.useState('portrait');
     const [purposeConfigs, setPurposeConfigs] = React.useState({});
     const [editingPurpose, setEditingPurpose] = React.useState(null);
-    const [activeId, setActiveId] = useState(null); // For instrument DragOverlay
+
     const [activeGroupId, setActiveGroupId] = useState(null); // For group DragOverlay
     const [groupOrder, setGroupOrder] = useState(() => {
         const saved = localStorage.getItem('magicSheet_groupOrder');
@@ -160,19 +117,48 @@ export function MagicSheetReport() {
     const [groupByField, setGroupByField] = useState(() => {
         return localStorage.getItem('magicSheet_groupBy') || 'purpose';
     });
-    const [canvasMode, setCanvasMode] = useState(() => {
-        return localStorage.getItem('magicSheet_canvasMode') === 'true';
+
+    const [hideDuplicates, setHideDuplicates] = useState(() => {
+        return localStorage.getItem('magicSheet_hideDuplicates') === 'true';
     });
-    const [collapsedGroups, setCollapsedGroups] = useState(() => {
-        const saved = localStorage.getItem('magicSheet_collapsedGroups');
-        return saved ? JSON.parse(saved) : [];
-    });
-    const [mergedGroups, setMergedGroups] = useState(() => {
-        // Map of source group -> target group (for merging)
-        const saved = localStorage.getItem('magicSheet_mergedGroups');
-        return saved ? JSON.parse(saved) : {};
-    });
-    const [showMergeHint, setShowMergeHint] = useState(false);
+
+    // --- Responsive Masonry Columns Logic ---
+    const [numCols, setNumCols] = React.useState(3);
+
+    React.useEffect(() => {
+        const updateCols = () => {
+            const isPrint = window.matchMedia('print').matches;
+            if (isPrint) {
+                setNumCols(orientation === 'landscape' ? 4 : 3);
+            } else if (window.innerWidth >= 1024) {
+                setNumCols(orientation === 'landscape' ? 4 : 3);
+            } else if (window.innerWidth >= 768) {
+                setNumCols(2);
+            } else {
+                setNumCols(1);
+            }
+        };
+
+        updateCols();
+        window.addEventListener('resize', updateCols);
+
+        const printQuery = window.matchMedia('print');
+        if (printQuery.addEventListener) {
+            printQuery.addEventListener('change', updateCols);
+        } else {
+            printQuery.addListener(updateCols);
+        }
+
+        return () => {
+            window.removeEventListener('resize', updateCols);
+            if (printQuery.removeEventListener) {
+                printQuery.removeEventListener('change', updateCols);
+            } else {
+                printQuery.removeListener(updateCols);
+            }
+        };
+    }, [orientation]);
+    // ----------------------------------------
 
     // Fetch metadata for custom field options
     const metadata = useLiveQuery(() => db.showMetadata.toArray());
@@ -193,7 +179,7 @@ export function MagicSheetReport() {
         ];
         // Add custom fields
         customFieldDefs.forEach(field => {
-            base.push({ id: `custom:${field}`, label: field });
+            base.push({ id: `custom:${field} `, label: field });
         });
         return base;
     }, [customFieldDefs]);
@@ -221,8 +207,10 @@ export function MagicSheetReport() {
     }, [groupByField]);
 
     React.useEffect(() => {
-        localStorage.setItem('magicSheet_canvasMode', canvasMode);
-    }, [canvasMode]);
+        localStorage.setItem('magicSheet_hideDuplicates', hideDuplicates);
+    }, [hideDuplicates]);
+
+
 
     const saveConfig = (purpose, config) => {
         const updated = { ...purposeConfigs, [purpose]: config };
@@ -275,6 +263,27 @@ export function MagicSheetReport() {
             orderedKeys = allGroupKeys.sort((a, b) => {
                 if (isNoValueGroup(a) && !isNoValueGroup(b)) return 1;
                 if (!isNoValueGroup(a) && isNoValueGroup(b)) return -1;
+
+                const getMinChannel = (groupItems) => {
+                    let min = Infinity;
+                    for (const item of groupItems) {
+                        const val = parseFloat(item.channel);
+                        if (!isNaN(val) && val < min) min = val;
+                    }
+                    return min;
+                };
+
+                const minA = getMinChannel(grps[a]);
+                const minB = getMinChannel(grps[b]);
+
+                if (minA !== Infinity && minB !== Infinity && minA !== minB) {
+                    return minA - minB;
+                } else if (minA !== Infinity && minB === Infinity) {
+                    return -1;
+                } else if (minB !== Infinity && minA === Infinity) {
+                    return 1;
+                }
+
                 return a.localeCompare(b);
             });
         }
@@ -284,34 +293,27 @@ export function MagicSheetReport() {
             items: grps[key]
         }));
 
-        // Process merged groups
-        const result = [];
-        const mergedSources = Object.keys(mergedGroups);
-
-        sorted.forEach(group => {
-            if (mergedSources.includes(group.purpose)) return;
-
-            const mergedItems = [];
-            const mergedFrom = [];
-            Object.entries(mergedGroups).forEach(([source, target]) => {
-                if (target === group.purpose) {
-                    const sourceGroup = sorted.find(g => g.purpose === source);
-                    if (sourceGroup) {
-                        mergedItems.push(...sourceGroup.items);
-                        mergedFrom.push(source);
-                    }
-                }
-            });
-
-            result.push({
+        const result = sorted.map(group => {
+            return {
                 ...group,
-                items: [...group.items, ...mergedItems],
-                mergedFrom: mergedFrom.length > 0 ? mergedFrom : null
-            });
+                items: (() => {
+                    let items = [...group.items];
+                    if (hideDuplicates) {
+                        const seen = new Set();
+                        items = items.filter(inst => {
+                            if (!inst.channel) return true;
+                            if (seen.has(inst.channel)) return false;
+                            seen.add(inst.channel);
+                            return true;
+                        });
+                    }
+                    return items;
+                })()
+            };
         });
 
         return { groups: grps, orderedGroupKeys: orderedKeys, sortedGroups: sorted, processedGroups: result };
-    }, [instruments, groupByField, groupOrder, mergedGroups, getFieldValue]);
+    }, [instruments, groupByField, groupOrder, getFieldValue, hideDuplicates]);
 
     // Early return AFTER all hooks
     if (!instruments) return <div>Loading...</div>;
@@ -320,122 +322,33 @@ export function MagicSheetReport() {
     const saveGroupOrder = (newOrder) => {
         setGroupOrder(newOrder);
         localStorage.setItem('magicSheet_groupOrder', JSON.stringify(newOrder));
-    };
-
-    // Toggle group collapse
-    const toggleCollapse = (groupKey) => {
-        const newCollapsed = collapsedGroups.includes(groupKey)
-            ? collapsedGroups.filter(k => k !== groupKey)
-            : [...collapsedGroups, groupKey];
-        setCollapsedGroups(newCollapsed);
-        localStorage.setItem('magicSheet_collapsedGroups', JSON.stringify(newCollapsed));
-    };
-
-    // Unmerge a group
-    const unmergeGroup = (sourceGroup) => {
-        const newMerged = { ...mergedGroups };
-        delete newMerged[sourceGroup];
-        setMergedGroups(newMerged);
-        localStorage.setItem('magicSheet_mergedGroups', JSON.stringify(newMerged));
-    };
-
-    // Find active instrument for overlay
-    const activeInstrument = activeId ? instruments.find(i => i.id === activeId) : null;
-    const activeGroupPurpose = activeInstrument ? (activeInstrument.purpose || '(No Purpose)') : null;
-    const activeConfig = activeGroupPurpose ? (purposeConfigs[activeGroupPurpose] || { layoutType: 'flex', showSwatches: false }) : {};
-
-    // Find active group for group overlay
+    };    // Find active group for group overlay
     const activeGroup = activeGroupId ? sortedGroups.find(g => g.purpose === activeGroupId) : null;
 
     const handleDragStart = (event) => {
         const id = event.active.id;
-        // Check if this is a group ID (string matching group purpose) or instrument ID (number)
         if (typeof id === 'string' && sortedGroups.some(g => g.purpose === id)) {
             setActiveGroupId(id);
-            setActiveId(null);
-        } else {
-            setActiveId(id);
-            setActiveGroupId(null);
         }
     };
 
     const handleDragEnd = (event) => {
         const { active, over } = event;
-
-        // Reset both states
-        setActiveId(null);
         setActiveGroupId(null);
 
         if (!over) return;
 
-        // Check if this was a group drag
+        // Group drag
         if (typeof active.id === 'string' && sortedGroups.some(g => g.purpose === active.id)) {
-            // Check if dropping onto another group (merge)
             if (active.id !== over.id && sortedGroups.some(g => g.purpose === over.id)) {
-                // Show merge confirmation
-                if (window.confirm(`Merge "${active.id}" into "${over.id}"?\n\nThis will visually combine the groups on the Magic Sheet.`)) {
-                    // Add merge mapping
-                    const newMerged = { ...mergedGroups, [active.id]: over.id };
-                    setMergedGroups(newMerged);
-                    localStorage.setItem('magicSheet_mergedGroups', JSON.stringify(newMerged));
-                } else {
-                    // Just reorder
-                    const currentOrder = orderedGroupKeys;
-                    const oldIndex = currentOrder.indexOf(active.id);
-                    const newIndex = currentOrder.indexOf(over.id);
-
-                    if (oldIndex !== -1 && newIndex !== -1) {
-                        const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
-                        saveGroupOrder(newOrder);
-                    }
+                const currentOrder = orderedGroupKeys;
+                const oldIndex = currentOrder.indexOf(active.id);
+                const newIndex = currentOrder.indexOf(over.id);
+                if (oldIndex !== -1 && newIndex !== -1) {
+                    const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
+                    saveGroupOrder(newOrder);
                 }
             }
-            return;
-        }
-
-        // Otherwise, this is an instrument drag
-        const activeInst = instruments.find(i => i.id === active.id);
-        if (!activeInst) return;
-
-        const purpose = getFieldValue(activeInst, groupByField);
-        const groupItems = groups[purpose];
-
-        // Pick config
-        const config = purposeConfigs[purpose] || {};
-
-        // Prevent drag if locked
-        if (config.isLocked) return;
-
-        // Reuse sort logic to get current items
-        const groupConfig = config;
-        let currentDisplayOrder = [...groupItems];
-        if (groupConfig.sortOrder === 'numerical') {
-            currentDisplayOrder.sort((a, b) => (parseFloat(a.channel) || 0) - (parseFloat(b.channel) || 0));
-        } else if (groupConfig.sortOrder === 'reverse') {
-            currentDisplayOrder.sort((a, b) => (parseFloat(b.channel) || 0) - (parseFloat(a.channel) || 0));
-        } else if (groupConfig.sortOrder === 'custom' && groupConfig.customOrder && groupConfig.customOrder.length > 0) {
-            const orderMap = new Map(groupConfig.customOrder.map((id, index) => [id, index]));
-            currentDisplayOrder.sort((a, b) => {
-                const idxA = orderMap.has(a.id) ? orderMap.get(a.id) : 999999;
-                const idxB = orderMap.has(b.id) ? orderMap.get(b.id) : 999999;
-                return idxA - idxB;
-            });
-        } else {
-            currentDisplayOrder.sort((a, b) => (parseFloat(a.channel) || 0) - (parseFloat(b.channel) || 0));
-        }
-
-        const oldIndex = currentDisplayOrder.findIndex((item) => item.id === active.id);
-        const newIndex = currentDisplayOrder.findIndex((item) => item.id === over.id);
-
-        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-            const reorderedItems = arrayMove(currentDisplayOrder, oldIndex, newIndex);
-            const newOrderIds = reorderedItems.map(i => i.id);
-
-            saveConfig(purpose, {
-                ...config,
-                customOrder: newOrderIds,
-                sortOrder: 'custom'
-            });
         }
     };
 
@@ -454,17 +367,7 @@ export function MagicSheetReport() {
                 </select>
             </div>
 
-            <div className="h-4 w-px bg-gray-300"></div>
 
-            <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                    type="checkbox"
-                    checked={canvasMode}
-                    onChange={(e) => setCanvasMode(e.target.checked)}
-                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Canvas Mode</span>
-            </label>
 
             {groupOrder && (
                 <button
@@ -491,13 +394,26 @@ export function MagicSheetReport() {
                     <option value="landscape">Landscape</option>
                 </select>
             </div>
+
+            <div className="h-4 w-px bg-gray-300"></div>
+
+            <button
+                onClick={() => setHideDuplicates(!hideDuplicates)}
+                className={`px-3 py-1 rounded font-bold uppercase transition-all border ${hideDuplicates
+                    ? 'bg-indigo-600 text-white border-indigo-700'
+                    : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-500'
+                    }`}
+                style={{ fontSize: '10px' }}
+            >
+                {hideDuplicates ? 'Duplicates Hidden' : 'Hide Duplicates'}
+            </button>
         </div>
     );
 
     return (
         <ReportLayout title="Magic Sheet" orientation={orientation} controls={controls}>
             {/* Force Light Mode Container */}
-            <div className="bg-white text-black min-h-full p-4">
+            <div className="bg-white text-black min-h-full p-4 print:p-0">
                 <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}
@@ -508,32 +424,25 @@ export function MagicSheetReport() {
                         items={processedGroups.map(g => g.purpose)}
                         strategy={rectSortingStrategy}
                     >
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 print:grid-cols-3">
-                            {processedGroups.map(group => {
-                                const isCollapsed = collapsedGroups.includes(group.purpose);
+                        {(() => {
+                            const sortedGroupElements = [...processedGroups].sort((a, b) => {
+                                const aHidden = (purposeConfigs[a.purpose] || {}).isHidden ? 1 : 0;
+                                const bHidden = (purposeConfigs[b.purpose] || {}).isHidden ? 1 : 0;
+                                return aHidden - bHidden;
+                            }).map(group => {
                                 const isNoValueGroup = group.purpose.startsWith('(No ');
                                 const config = purposeConfigs[group.purpose] || {
                                     sortOrder: 'numerical',
-                                    layoutType: 'flex',
-                                    gridCols: 8,
-                                    showSwatches: false,
-                                    customOrder: [],
-                                    isLocked: false
+                                    fillDirection: 'bottom',
+                                    gridCols: 5,
+                                    isLocked: false,
+                                    isHidden: false
                                 };
 
                                 // Sort Logic
                                 let displayItems = [...group.items];
-                                if (config.sortOrder === 'numerical') {
-                                    displayItems.sort((a, b) => (parseFloat(a.channel) || 0) - (parseFloat(b.channel) || 0));
-                                } else if (config.sortOrder === 'reverse') {
+                                if ((config.sortOrder || 'numerical') === 'reverse') {
                                     displayItems.sort((a, b) => (parseFloat(b.channel) || 0) - (parseFloat(a.channel) || 0));
-                                } else if (config.sortOrder === 'custom' && config.customOrder && config.customOrder.length > 0) {
-                                    const orderMap = new Map(config.customOrder.map((id, index) => [id, index]));
-                                    displayItems.sort((a, b) => {
-                                        const idxA = orderMap.has(a.id) ? orderMap.get(a.id) : 999999;
-                                        const idxB = orderMap.has(b.id) ? orderMap.get(b.id) : 999999;
-                                        return idxA - idxB;
-                                    });
                                 } else {
                                     displayItems.sort((a, b) => (parseFloat(a.channel) || 0) - (parseFloat(b.channel) || 0));
                                 }
@@ -554,17 +463,18 @@ export function MagicSheetReport() {
                                     <SortableGroup
                                         key={group.purpose}
                                         id={group.purpose}
-                                        accentColor={accentColor}
-                                        isCollapsed={isCollapsed}
-                                        onToggleCollapse={() => toggleCollapse(group.purpose)}
+                                        accentColor={config.isHidden ? '#9ca3af' : accentColor}
+                                        className={config.cardWidth === '2/3' ? 'md:col-span-2' : config.cardWidth === 'full' ? 'md:col-span-2 lg:col-span-3' : ''}
+                                        isMenuOpen={isEditing}
+                                        onMenuClick={() => setEditingPurpose(isEditing ? null : group.purpose)}
                                     >
-                                        <div className="mb-6 print-break-inside rounded-xl bg-white print:border-black print:bg-transparent shadow-lg overflow-hidden border border-gray-200 pl-10">
+                                        <div className={`mb-6 print:mb-2 inline-block w-full break-inside-avoid rounded-xl bg-white print:border-black print:bg-transparent shadow-lg print:shadow-none overflow-hidden border border-gray-200 pl-10 print:pl-0 ${config.isHidden ? 'opacity-40 print:hidden' : ''}`}>
                                             {/* Gradient Header */}
                                             <div
-                                                className="px-4 py-3 flex items-center justify-between"
+                                                className="px-4 py-3 print:py-1.5 flex items-center justify-between"
                                                 style={{
-                                                    background: `linear-gradient(135deg, ${accentColor}22 0%, ${accentColor}08 100%)`,
-                                                    borderBottom: `3px solid ${accentColor}`
+                                                    background: `linear - gradient(135deg, ${accentColor}22 0 %, ${accentColor}08 100 %)`,
+                                                    borderBottom: `3px solid ${accentColor} `
                                                 }}
                                             >
                                                 <div className="flex items-center gap-3">
@@ -574,154 +484,157 @@ export function MagicSheetReport() {
                                                     />
                                                     <h3 className="font-bold text-lg uppercase tracking-wide text-gray-800">{group.purpose}</h3>
                                                     <span className="text-xs text-gray-500 font-medium">({displayItems.length})</span>
-                                                    {/* Merged From Badges */}
-                                                    {group.mergedFrom && group.mergedFrom.map(src => (
-                                                        <span
-                                                            key={src}
-                                                            className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full flex items-center gap-1 print:hidden"
-                                                        >
-                                                            +{src}
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); unmergeGroup(src); }}
-                                                                className="hover:text-red-500"
-                                                                title={`Unmerge ${src}`}
-                                                            >
-                                                                ×
-                                                            </button>
-                                                        </span>
-                                                    ))}
                                                     {config.isLocked && (
                                                         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                                         </svg>
                                                     )}
                                                 </div>
-                                                <button
-                                                    onClick={() => setEditingPurpose(isEditing ? null : group.purpose)}
-                                                    className={`p-1.5 rounded-lg print:hidden transition-all ${isEditing
-                                                        ? 'bg-indigo-500 text-white shadow-md'
-                                                        : 'bg-white/50 text-gray-500 hover:text-gray-800 hover:bg-white hover:shadow'
-                                                        }`}
-                                                    title="Configure layout"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    </svg>
-                                                </button>
                                             </div>
 
-                                            {/* Content Area - hide when collapsed */}
-                                            {!isCollapsed && (
-                                                <div className="p-4">
-                                                    {isEditing && (
-                                                        <div className="mb-3 p-3 bg-white border border-gray-300 rounded space-y-3 print:hidden shadow-lg box-border">
-                                                            <div className="pb-3 border-b border-gray-200">
-                                                                <label className="flex items-center gap-2 cursor-pointer">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={!!config.isLocked}
-                                                                        onChange={(e) => saveConfig(group.purpose, { ...config, isLocked: e.target.checked })}
-                                                                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
-                                                                    />
-                                                                    <span className="text-xs font-bold text-gray-800">Lock Layout</span>
-                                                                </label>
-                                                                <p className="text-[10px] text-gray-500 mt-0.5 ml-5">
-                                                                    Prevent accidental changes to this group.
-                                                                </p>
-                                                            </div>
+                                            {/* Content Area */}
+                                            <div className="p-4 print:p-2">
+                                                {isEditing && (
+                                                    <div className="mb-3 p-3 bg-white border border-gray-300 rounded space-y-3 print:hidden shadow-lg box-border">
+                                                        <div className="pb-3 border-b border-gray-200 flex gap-4">
+                                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={!!config.isLocked}
+                                                                    onChange={(e) => saveConfig(group.purpose, { ...config, isLocked: e.target.checked })}
+                                                                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+                                                                />
+                                                                <span className="text-xs font-bold text-gray-800">Lock Layout</span>
+                                                            </label>
+                                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={config.isHidden || false}
+                                                                    onChange={(e) => saveConfig(group.purpose, { ...config, isHidden: e.target.checked })}
+                                                                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+                                                                />
+                                                                <span className="text-xs font-bold text-gray-800">Hide Card</span>
+                                                            </label>
+                                                        </div>
 
-                                                            <div className={config.isLocked ? "opacity-50 pointer-events-none" : ""}>
-                                                                <div className="mb-3">
+                                                        <div className={config.isLocked ? "opacity-50 pointer-events-none" : ""}>
+                                                            <div className="mb-3 flex gap-3">
+                                                                <div className="flex-1">
                                                                     <label className="block text-xs font-semibold text-gray-600 mb-1">Sort Order</label>
                                                                     <select
-                                                                        value={config.sortOrder}
+                                                                        value={config.sortOrder || 'numerical'}
                                                                         onChange={(e) => saveConfig(group.purpose, { ...config, sortOrder: e.target.value })}
                                                                         className="w-full text-sm bg-white text-black border border-gray-300 rounded px-2 py-1"
                                                                     >
-                                                                        <option value="numerical">Numerical (1, 2, 3...)</option>
-                                                                        <option value="reverse">Reverse (3, 2, 1...)</option>
-                                                                        <option value="custom">Custom (Drag & Drop)</option>
+                                                                        <option value="numerical">Numerical (Low→High)</option>
+                                                                        <option value="reverse">Reverse (High→Low)</option>
                                                                     </select>
                                                                 </div>
-
-                                                                <div className="mb-3">
-                                                                    <label className="block text-xs font-semibold text-gray-600 mb-1">Layout Type</label>
+                                                                <div className="flex-1">
+                                                                    <label className="block text-xs font-semibold text-gray-600 mb-1">Fill Direction</label>
                                                                     <select
-                                                                        value={config.layoutType}
-                                                                        onChange={(e) => saveConfig(group.purpose, { ...config, layoutType: e.target.value })}
+                                                                        value={config.fillDirection || 'bottom'}
+                                                                        onChange={(e) => saveConfig(group.purpose, { ...config, fillDirection: e.target.value })}
                                                                         className="w-full text-sm bg-white text-black border border-gray-300 rounded px-2 py-1"
                                                                     >
-                                                                        <option value="flex">Flexible Wrap</option>
-                                                                        <option value="grid">Fixed Grid</option>
+                                                                        <option value="bottom">Bottom Up</option>
+                                                                        <option value="top">Top Down</option>
                                                                     </select>
                                                                 </div>
+                                                            </div>
 
-                                                                {config.layoutType === 'grid' && (
-                                                                    <div className="mb-3">
-                                                                        <label className="block text-xs font-semibold text-gray-600 mb-1">Columns</label>
-                                                                        <input
-                                                                            type="number"
-                                                                            min="1"
-                                                                            max="20"
-                                                                            value={config.gridCols}
-                                                                            onChange={(e) => saveConfig(group.purpose, { ...config, gridCols: parseInt(e.target.value) || 8 })}
-                                                                            className="w-full text-sm bg-white text-black border border-gray-300 rounded px-2 py-1"
-                                                                        />
-                                                                    </div>
-                                                                )}
-
-                                                                <div>
-                                                                    <label className="flex items-center gap-2 cursor-pointer">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={config.showSwatches}
-                                                                            onChange={(e) => saveConfig(group.purpose, { ...config, showSwatches: e.target.checked })}
-                                                                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
-                                                                        />
-                                                                        <span className="text-xs font-semibold text-gray-800">Show Color Swatches</span>
-                                                                    </label>
+                                                            <div className="mb-3 flex gap-3">
+                                                                <div className="flex-1">
+                                                                    <label className="block text-xs font-semibold text-gray-600 mb-1">Columns</label>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="1"
+                                                                        max="20"
+                                                                        value={config.gridCols || 5}
+                                                                        onChange={(e) => saveConfig(group.purpose, { ...config, gridCols: parseInt(e.target.value) || 5 })}
+                                                                        className="w-full text-sm bg-white text-black border border-gray-300 rounded px-2 py-1"
+                                                                    />
                                                                 </div>
-                                                                <div className="text-[10px] text-gray-500 italic mt-1">
-                                                                    Tip: Drag any channel to automatically switch to Custom sort.
+                                                                <div className="flex-1">
+                                                                    <label className="block text-xs font-semibold text-gray-600 mb-1">Card Width</label>
+                                                                    <select
+                                                                        value={config.cardWidth || '1/3'}
+                                                                        onChange={(e) => saveConfig(group.purpose, { ...config, cardWidth: e.target.value })}
+                                                                        className="w-full text-sm bg-white text-black border border-gray-300 rounded px-2 py-1"
+                                                                    >
+                                                                        <option value="1/3">1/3</option>
+                                                                        <option value="2/3">2/3</option>
+                                                                        <option value="full">Full</option>
+                                                                    </select>
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    )}
 
-                                                    <SortableContext
-                                                        items={displayItems.map(i => i.id)}
-                                                        strategy={rectSortingStrategy}
-                                                    >
-                                                        <div
-                                                            className={config.layoutType === 'flex' ? "flex flex-wrap gap-2" : "grid gap-2"}
-                                                            style={config.layoutType === 'grid' ? {
-                                                                gridTemplateColumns: `repeat(${config.gridCols}, minmax(3rem, 1fr))`,
-                                                                gridAutoFlow: 'row'
-                                                            } : {}}
-                                                        >
-                                                            {displayItems.map(inst => (
-                                                                <SortableInstrument
-                                                                    key={inst.id}
-                                                                    id={inst.id}
-                                                                    inst={inst}
-                                                                    config={config}
-                                                                />
-                                                            ))}
+
                                                         </div>
-                                                    </SortableContext>
-                                                </div>
-                                            )}
+                                                    </div>
+                                                )}
+
+                                                {(() => {
+                                                    const cols = config.gridCols || 5;
+                                                    const totalItems = displayItems.length;
+                                                    const totalRows = Math.ceil(totalItems / cols);
+                                                    const itemsInLastRow = totalItems % cols || cols;
+
+                                                    return (
+                                                        <div
+                                                            className="grid gap-2 print:gap-1"
+                                                            style={{
+                                                                gridTemplateColumns: `repeat(${cols}, minmax(2.5rem, 1fr))`,
+                                                                gridTemplateRows: `repeat(${totalRows}, auto)`
+                                                            }}
+                                                        >
+                                                            {displayItems.map((inst, index) => {
+                                                                const rowFromTop = Math.floor(index / cols);
+                                                                const colInRow = index % cols;
+                                                                const fillBottom = (config.fillDirection || 'bottom') === 'bottom';
+                                                                const gridRow = fillBottom ? totalRows - rowFromTop : rowFromTop + 1;
+                                                                let gridCol = colInRow + 1;
+
+                                                                // Distribute partial row evenly (top row for bottom-up, bottom row for top-down)
+                                                                const isPartialRow = rowFromTop === totalRows - 1 && itemsInLastRow < cols;
+                                                                if (isPartialRow) {
+                                                                    gridCol = Math.floor((colInRow + 0.5) * cols / itemsInLastRow) + 1;
+                                                                }
+
+                                                                return (
+                                                                    <div key={inst.id} style={{ gridRow, gridColumn: gridCol }}>
+                                                                        <InstrumentCell inst={inst} config={config} />
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
                                         </div>
                                     </SortableGroup>
                                 );
-                            })}
-                        </div>
+                            });
+
+                            // Distribute into columns Left-to-Right
+                            const layoutCols = Array.from({ length: numCols }, () => []);
+                            sortedGroupElements.forEach((el, index) => {
+                                layoutCols[index % numCols].push(el);
+                            });
+
+                            return (
+                                <div className="flex gap-6 print:gap-2 w-full items-start">
+                                    {layoutCols.map((col, i) => (
+                                        <div key={`col-${i}`} className="flex-1 flex flex-col gap-6 print:gap-2 min-w-0">
+                                            {col}
+                                        </div>
+                                    ))}
+                                </div>
+                            );
+                        })()}
                     </SortableContext>
                     <DragOverlay>
-                        {activeId ? (
-                            <DragOverlayItem inst={activeInstrument} config={activeConfig} />
-                        ) : activeGroup ? (
+                        {activeGroup ? (
                             <GroupDragOverlay group={activeGroup} accentColor="#6366f1" />
                         ) : null}
                     </DragOverlay>

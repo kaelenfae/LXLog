@@ -3,6 +3,20 @@ import { useNavigate } from 'react-router-dom';
 
 const PATCH_NOTES = [
     {
+        version: "0.4.1",
+        date: "2026-02-19",
+        title: "Print Center & Flexible Tracking",
+        changes: [
+            "New Feature: Print Center – Bundle multiple reports into a single unified PDF with professional cover pages.",
+            "New Feature: Enhanced Magic Sheets – better display and ordering, more flexibility options added.",
+            "New Feature: Flexible Channel Displays – Choose between Parts (P1), Dots (.1), or Legacy display modes across all reports.",
+            "Advanced Logic: Support for multi-cell/sub-fixtures and automatic duplicate merging (2-fers) in Magic Sheets.",
+            "PDF Engine: Upgraded to @react-pdf/renderer for pixel-perfect, high-fidelity report exports.",
+            "Paperwork Fixes: The Hanging Schedule PDF now correctly respects your column visibility and address formatting settings.",
+            "UI Consistency: Standardized 'Print' theme for all reports, ensuring light-mode clarity even when the app is in Dark Mode."
+        ]
+    },
+    {
         version: "0.3.5",
         date: "2026-02-13",
         title: "Integrity & UI Refinements",

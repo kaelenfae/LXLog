@@ -274,6 +274,44 @@ html.dyslexic {
   --font-sans: 'OpenDyslexic', 'Comic Sans MS', sans-serif;
 }
 
+/* Force Light Theme for Reports (Applied to ReportLayout) */
+.report-theme {
+  --bg-app: #ffffff;
+  --bg-panel: #f9fafb;
+  --bg-card: #ffffff;
+  --bg-hover: #f3f4f6;
+
+  --border-subtle: #f3f4f6;
+  --border-default: #e5e7eb;
+  --border-focus: #d1d5db;
+
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-tertiary: #9ca3af;
+
+  --accent-primary: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-text: #ffffff;
+}
+
+.report-theme input,
+.report-theme select,
+.report-theme textarea,
+.report-theme button:not(.primary) {
+  background-color: var(--bg-card) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-default) !important;
+}
+
+.report-theme button.primary {
+  background-color: var(--accent-primary) !important;
+  color: var(--accent-text) !important;
+}
+
+.report-theme ::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+}
+
 /* ===== ACCESSIBILITY CLASSES ===== */
 /* These can be combined with any theme */
 

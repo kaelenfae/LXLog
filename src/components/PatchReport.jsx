@@ -4,14 +4,20 @@ import { db } from '../db';
 import { ReportLayout } from './ReportLayout';
 import { useSettings } from '../hooks/useSettings';
 import { formatAddress } from '../utils/addressFormatter';
+import { PatchPDF } from './PatchPDF';
+import { useShowInfo } from '../hooks/useShowInfo';
+import { PDFDownloadButton } from './PDFDownloadButton';
+import { OrientationSelect } from './OrientationSelect';
 
 export function PatchReport() {
     const [orientation, setOrientation] = useState('portrait');
     const [colCount, setColCount] = useState('auto');
     const [groupByType, setGroupByType] = useState(false);
+    const [includeCover, setIncludeCover] = useState(true);
 
-    // Interface Settings
-    const { addressMode, showUniverse1, universeSeparator } = useSettings();
+    // Interface Settings — now includes channelDisplayMode for consistency
+    const { addressMode, showUniverse1, universeSeparator, channelDisplayMode } = useSettings();
+    const { showInfo } = useShowInfo();
 
     const instruments = useLiveQuery(async () => {
         const all = await db.instruments.toArray();
@@ -58,7 +64,7 @@ export function PatchReport() {
             data = flatList;
         }
 
-        // Decorate with Display Channel (Part Handling)
+        // Decorate with Display Channel (Part Handling) — now respects channelDisplayMode
         let lastChannel = null;
         return data.map(item => {
             if (item.isHeader) {
@@ -69,7 +75,11 @@ export function PatchReport() {
             const inst = { ...item };
 
             if (inst.channel === lastChannel && inst.part) {
-                inst.displayChannel = `.${inst.part}`;
+                // Use the same channelDisplayMode logic as ChannelHookupReport
+                if (channelDisplayMode === 'parts') inst.displayChannel = `P${inst.part}`;
+                else if (channelDisplayMode === 'dots') inst.displayChannel = `.${inst.part}`;
+                else if (channelDisplayMode === 'hide') inst.displayChannel = '';
+                else inst.displayChannel = inst.channel; // Show Dups
             } else {
                 inst.displayChannel = inst.channel;
                 lastChannel = inst.channel;
@@ -77,21 +87,13 @@ export function PatchReport() {
             return inst;
         });
 
-    }, [instruments, groupByType]);
+    }, [instruments, groupByType, channelDisplayMode]);
 
 
     const controls = (
         <div className="flex gap-4 items-center bg-gray-100 p-2 rounded text-xs text-black border border-gray-300">
             <div className="flex items-center gap-2 border-r border-gray-300 pr-4">
-                <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Orientation:</span>
-                <select
-                    value={orientation}
-                    onChange={(e) => setOrientation(e.target.value)}
-                    className="bg-white text-black border border-gray-300 rounded px-2 py-1 cursor-pointer hover:border-indigo-500 focus:outline-none focus:border-indigo-500"
-                >
-                    <option value="portrait">Portrait</option>
-                    <option value="landscape">Landscape</option>
-                </select>
+                <OrientationSelect value={orientation} onChange={setOrientation} />
             </div>
 
             <div className="flex items-center gap-2 border-r border-gray-300 pr-4">
@@ -118,6 +120,16 @@ export function PatchReport() {
                 />
                 <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Group by Type</span>
             </label>
+
+            <label className="flex items-center gap-2 cursor-pointer select-none border-l border-gray-300 pl-4">
+                <input
+                    type="checkbox"
+                    checked={includeCover}
+                    onChange={(e) => setIncludeCover(e.target.checked)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                />
+                <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Cover Page</span>
+            </label>
         </div>
     );
 
@@ -133,10 +145,25 @@ export function PatchReport() {
         }
     }
 
-    if (!instruments) return <div>Loading...</div>;
+    if (!instruments) return <div className="p-8 text-gray-500">Loading...</div>;
+
+    const pdfBtn = (
+        <PDFDownloadButton
+            document={
+                <PatchPDF
+                    showInfo={showInfo}
+                    processedData={processedData}
+                    orientation={orientation}
+                    colCount={effectiveColCount}
+                    includeCover={includeCover}
+                />
+            }
+            fileName={`${(showInfo.name || 'Show').replace(/\s+/g, '_')}_Patch.pdf`}
+        />
+    );
 
     return (
-        <ReportLayout title="Patch" controls={controls} orientation={orientation}>
+        <ReportLayout title="Patch" controls={controls} orientation={orientation} pdfButton={pdfBtn}>
             {chunks.map((chunk, pageIndex) => (
                 <div key={pageIndex} className="print:break-after-page mb-8 break-after-page">
                     {/* Header Row - Repeated for each page/chunk */}
@@ -164,13 +191,15 @@ export function PatchReport() {
                                 );
                             }
                             const inst = item;
+                            const displayStr = String(inst.displayChannel || '');
+                            const isPartDisplay = displayStr.startsWith('.') || displayStr.startsWith('P');
                             return (
                                 <div
                                     key={inst.id}
                                     className="flex items-baseline border-b border-gray-200 pb-1 mb-1 break-inside-avoid print:break-inside-avoid"
                                 >
                                     {/* Channel - Right Aligned, Bold */}
-                                    <div className={`w-20 text-right pr-2 ${String(inst.displayChannel).startsWith('.') ? 'font-bold text-base text-gray-500' : 'font-black text-lg'}`}>
+                                    <div className={`w-20 text-right pr-2 ${isPartDisplay ? 'font-bold text-base text-gray-500' : 'font-black text-lg'}`}>
                                         {inst.displayChannel || inst.channel || '-'}
                                     </div>
 

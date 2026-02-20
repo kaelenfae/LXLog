@@ -3,14 +3,20 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { ReportLayout } from './ReportLayout';
 import { getGelColor } from '../utils/gelData';
+import { CuttingListPDF } from './CuttingListPDF';
+import { useShowInfo } from '../hooks/useShowInfo';
+import { PDFDownloadButton } from './PDFDownloadButton';
+import { OrientationSelect } from './OrientationSelect';
 
 export function CuttingListReport() {
     const [orientation, setOrientation] = useState('portrait');
     const [showSwatches, setShowSwatches] = useState(true);
     // Determine sort mode: 'color' or 'type'
     const [sortBy, setSortBy] = useState('color');
+    const [includeCover, setIncludeCover] = useState(true);
 
     const instruments = useLiveQuery(() => db.instruments.toArray());
+    const { showInfo } = useShowInfo();
 
     const summary = React.useMemo(() => {
         if (!instruments) return [];
@@ -104,24 +110,14 @@ export function CuttingListReport() {
         }
     }, [instruments, sortBy]);
 
-    if (!instruments) return <div>Loading...</div>;
+    if (!instruments) return <div className="p-8 text-gray-500">Loading...</div>;
 
     const totalCuts = summary.reduce((acc, curr) => acc + curr.count, 0);
     const totalGroups = summary.length;
 
     const controls = (
         <div className="flex gap-4 items-center bg-gray-100 p-2 rounded text-xs text-black border border-gray-300">
-            <div className="flex items-center gap-2 pr-4">
-                <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Orientation:</span>
-                <select
-                    value={orientation}
-                    onChange={(e) => setOrientation(e.target.value)}
-                    className="bg-white text-black border border-gray-300 rounded px-2 py-1 cursor-pointer hover:border-indigo-500 focus:outline-none focus:border-indigo-500"
-                >
-                    <option value="portrait">Portrait</option>
-                    <option value="landscape">Landscape</option>
-                </select>
-            </div>
+            <OrientationSelect value={orientation} onChange={setOrientation} />
             <div className="flex items-center gap-2">
                 <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Group By:</span>
                 <div className="flex bg-white rounded border border-gray-300 overflow-hidden">
@@ -151,11 +147,37 @@ export function CuttingListReport() {
                     <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Show Swatches</span>
                 </label>
             </div>
+            <label className="flex items-center gap-2 cursor-pointer select-none border-l border-gray-300 pl-4">
+                <input
+                    type="checkbox"
+                    checked={includeCover}
+                    onChange={(e) => setIncludeCover(e.target.checked)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                />
+                <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Cover Page</span>
+            </label>
         </div>
     );
 
+    const pdfBtn = (
+        <PDFDownloadButton
+            document={
+                <CuttingListPDF
+                    showInfo={showInfo}
+                    summary={summary}
+                    sortBy={sortBy}
+                    totalGroups={totalGroups}
+                    totalCuts={totalCuts}
+                    orientation={orientation}
+                    includeCover={includeCover}
+                />
+            }
+            fileName={`${(showInfo.name || 'Show').replace(/\s+/g, '_')}_CuttingList.pdf`}
+        />
+    );
+
     return (
-        <ReportLayout title="Cutting List" orientation={orientation} controls={controls}>
+        <ReportLayout title="Cutting List" orientation={orientation} controls={controls} pdfButton={pdfBtn}>
             <div className="max-w-4xl mx-auto">
                 {/* Header with Totals */}
                 <div className="mb-6 pb-3 border-b border-gray-300 flex justify-between items-center">

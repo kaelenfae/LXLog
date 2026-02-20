@@ -2,7 +2,27 @@
 
 All notable changes to LXLog will be documented in this file.
 
-## [0.3.5] - 2026-02-13
+## [0.4.1] - 2026-02-19
+
+### Added
+- **Unified Print Center**: A new centralized hub for selecting and bundling multiple reports (Channel Hookup, Hanging Schedule, Patch, etc.) into a single PDF document.
+- **Enhanced Magic Sheets**: better display and ordering, more flexibility options added.
+    - **Setup Wizard**: Quickly configure grid dimensions, numbering directions, and display preferences.
+    - **Dynamic Grouping**: Group by any field, including user-defined custom fields.
+    - **Variable Widths**: Arrange groups in 1/3, 2/3, or Full page widths for more flexible board layouts.
+    - **Sub-fixture Support**: Intelligent handling of multi-cell fixtures and part-based channels.
+    - **Duplicate Merging**: Option to automatically merge duplicated channels (2-fers) into single visual tiles.
+- **Combined Cover Pages**: Reports can now be bundled with a professional cover page for show binders.
+- **Flexible Channel Tracking**: Added global settings for channel display (Parts, Dots, Hide/Show Duplicates) that apply across all views and PDF reports.
+
+### Changed
+- **PDF Engine Upgrade**: Migrated all report exports to `@react-pdf/renderer` for better layout control and high-fidelity output.
+- **Print Branding**: Standardized report headers and footers with customizable show info (Venue, Designer, assistants).
+- **Light Theme Reports**: All reports now utilize a forced light theme for printing, ensuring clarity regardless of UI theme.
+
+### Fixed
+- Fixed critical crash in Hanging Schedule PDF generation.
+- Fixed PDF reports ignoring column visibility and address formatting preferences.
 
 ### Added
 - **Address Range Visibility**: The Instrument Schedule now displays full DMX ranges (e.g., `1/1–1/4`) for multi-channel fixtures in the Address column.

@@ -43,7 +43,10 @@ export function ImportWizardModal({ onClose, onConfirm }) {
         name: '',
         designer: '',
         venue: '',
-        assistant: ''
+        assistant: '',
+        director: '',
+        producer: '',
+        company: ''
     });
 
     // Parse file when content is loaded
@@ -155,6 +158,10 @@ export function ImportWizardModal({ onClose, onConfirm }) {
         setFile(selectedFile);
         setError(null);
 
+        // Set default show name from filename (strip extension)
+        const baseName = selectedFile.name.replace(/\.[^/.]+$/, "");
+        setShowMetadata(prev => ({ ...prev, name: baseName }));
+
         const reader = new FileReader();
         reader.onload = (event) => {
             setFileContent(event.target.result);
@@ -189,6 +196,9 @@ export function ImportWizardModal({ onClose, onConfirm }) {
         setSelectedFields(none);
     };
 
+    const [showMoreInfo, setShowMoreInfo] = useState(false);
+
+    // Process import from wizard
     const handleConfirm = () => {
         const selectedFieldNames = Object.entries(selectedFields)
             .filter(([_, selected]) => selected)
@@ -356,7 +366,7 @@ export function ImportWizardModal({ onClose, onConfirm }) {
                             <div className="space-y-3">
                                 <label className={`flex items-start gap-3 p-3 rounded border cursor-pointer transition-colors ${importMode === 'replace'
                                     ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]'
-                                    : 'bg-[var(--bg-card)] border-[var(--border-default)] hover:border-[var(--text-secondary)]'
+                                    : 'bg-[var(--bg-card)] border-[var(--border-default)] hover:border(--text-secondary)]'
                                     }`}>
                                     <input
                                         type="radio"
@@ -411,22 +421,22 @@ export function ImportWizardModal({ onClose, onConfirm }) {
                                     />
                                 </label>
                                 <label className="block">
-                                    <span className="text-xs text-[var(--text-secondary)]">Designer</span>
-                                    <input
-                                        type="text"
-                                        value={showMetadata.designer}
-                                        onChange={e => setShowMetadata({ ...showMetadata, designer: e.target.value })}
-                                        placeholder="Lighting Designer"
-                                        className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
-                                    />
-                                </label>
-                                <label className="block">
                                     <span className="text-xs text-[var(--text-secondary)]">Venue</span>
                                     <input
                                         type="text"
                                         value={showMetadata.venue}
                                         onChange={e => setShowMetadata({ ...showMetadata, venue: e.target.value })}
                                         placeholder="Theater Name"
+                                        className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
+                                    />
+                                </label>
+                                <label className="block">
+                                    <span className="text-xs text-[var(--text-secondary)]">Designer</span>
+                                    <input
+                                        type="text"
+                                        value={showMetadata.designer}
+                                        onChange={e => setShowMetadata({ ...showMetadata, designer: e.target.value })}
+                                        placeholder="Lighting Designer"
                                         className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
                                     />
                                 </label>
@@ -440,6 +450,62 @@ export function ImportWizardModal({ onClose, onConfirm }) {
                                         className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
                                     />
                                 </label>
+
+                                {showMoreInfo ? (
+                                    <>
+                                        <label className="block animate-in fade-in slide-in-from-top-1 duration-200">
+                                            <span className="text-xs text-[var(--text-secondary)]">Director</span>
+                                            <input
+                                                type="text"
+                                                value={showMetadata.director}
+                                                onChange={e => setShowMetadata({ ...showMetadata, director: e.target.value })}
+                                                placeholder="Director"
+                                                className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
+                                            />
+                                        </label>
+                                        <label className="block animate-in fade-in slide-in-from-top-1 duration-200">
+                                            <span className="text-xs text-[var(--text-secondary)]">Producer</span>
+                                            <input
+                                                type="text"
+                                                value={showMetadata.producer}
+                                                onChange={e => setShowMetadata({ ...showMetadata, producer: e.target.value })}
+                                                placeholder="Producer"
+                                                className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
+                                            />
+                                        </label>
+                                        <label className="block animate-in fade-in slide-in-from-top-1 duration-200">
+                                            <span className="text-xs text-[var(--text-secondary)]">Company</span>
+                                            <input
+                                                type="text"
+                                                value={showMetadata.company}
+                                                onChange={e => setShowMetadata({ ...showMetadata, company: e.target.value })}
+                                                placeholder="Company"
+                                                className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
+                                            />
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowMoreInfo(false)}
+                                            className="text-xs text-[var(--text-secondary)] hover:text-white underline mt-1 text-center w-full flex items-center justify-center gap-1 font-bold"
+                                        >
+                                            SHOW LESS
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" />
+                                            </svg>
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowMoreInfo(true)}
+                                        className="text-xs text-[var(--text-secondary)] hover:text-white underline mt-1 text-center w-full flex items-center justify-center gap-1 font-bold"
+                                    >
+                                        SHOW MORE
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </button>
+                                )}
                             </div>
                             <p className="text-xs text-[var(--text-secondary)] mt-4 italic">
                                 You can update this information later in Settings.

@@ -77,6 +77,30 @@ export function DmxUniverseView() {
         return map;
     }, [instruments]);
 
+    // Calculate Available Universes
+    const availableUniverses = useMemo(() => {
+        if (!universeMap || universeMap.size === 0) return [1];
+
+        const universes = new Set();
+        for (const key of universeMap.keys()) {
+            const u = parseInt(key.split(':')[0]);
+            if (!isNaN(u)) universes.add(u);
+        }
+
+        const sorted = Array.from(universes).sort((a, b) => a - b);
+
+        // Ensure at least universe 1 is always present
+        if (sorted.length === 0) return [1];
+
+        // Ensure the currently selected universe is in the list, even if empty
+        if (!sorted.includes(selectedUniverse)) {
+            sorted.push(selectedUniverse);
+            sorted.sort((a, b) => a - b);
+        }
+
+        return sorted;
+    }, [universeMap, selectedUniverse]);
+
     // Grid Generation
     const gridCells = useMemo(() => {
         const cells = [];
@@ -104,19 +128,17 @@ export function DmxUniverseView() {
             {/* Header */}
             <div className="h-14 border-b border-[var(--border-subtle)] flex items-center px-6 bg-[var(--bg-app)] justify-between shrink-0">
                 <h1 className="text-xl font-bold tracking-tight text-[var(--text-primary)]">DMX Universe View</h1>
-                <div className="flex bg-[var(--bg-panel)] rounded p-1 border border-[var(--border-subtle)]">
-                    {[1, 2, 3, 4].map(u => (
-                        <button
-                            key={u}
-                            onClick={() => setSelectedUniverse(u)}
-                            className={`px-4 py-1.5 text-sm font-medium rounded transition-colors ${selectedUniverse === u
-                                ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
-                                }`}
-                        >
-                            Universe {u}
-                        </button>
-                    ))}
+                <div className="flex items-center gap-3">
+                    <label className="text-sm font-bold text-[var(--text-secondary)] uppercase tracking-wider">Universe:</label>
+                    <select
+                        value={selectedUniverse}
+                        onChange={(e) => setSelectedUniverse(parseInt(e.target.value) || 1)}
+                        className="bg-[var(--bg-panel)] text-[var(--text-primary)] border border-[var(--border-subtle)] font-semibold rounded px-4 py-2 hover:border-[var(--border-default)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)] transition-colors cursor-pointer"
+                    >
+                        {availableUniverses.map(u => (
+                            <option key={u} value={u}>Universe {u}</option>
+                        ))}
+                    </select>
                 </div>
             </div>
 

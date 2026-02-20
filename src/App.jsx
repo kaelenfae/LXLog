@@ -23,6 +23,7 @@ import { MasterDetailLayout } from './components/MasterDetailLayout';
 import { ImportWizardModal } from './components/ImportWizardModal';
 import { FixtureLibrary } from './components/FixtureLibrary';
 import { DmxUniverseView } from './components/DmxUniverseView';
+import { PrintCenter } from './components/PrintCenter';
 
 function App() {
   const [showModal, setShowModal] = React.useState(false);
@@ -167,7 +168,10 @@ function App() {
             name: showMetadata.name || existingMetadata[0].name,
             designer: showMetadata.designer || existingMetadata[0].designer,
             venue: showMetadata.venue || existingMetadata[0].venue,
-            assistant: showMetadata.assistant || existingMetadata[0].assistant
+            assistant: showMetadata.assistant || existingMetadata[0].assistant,
+            director: showMetadata.director || existingMetadata[0].director,
+            producer: showMetadata.producer || existingMetadata[0].producer,
+            company: showMetadata.company || existingMetadata[0].company
           });
         } else {
           // Create new metadata entry
@@ -175,7 +179,10 @@ function App() {
             name: showMetadata.name || '',
             designer: showMetadata.designer || '',
             venue: showMetadata.venue || '',
-            assistant: showMetadata.assistant || ''
+            assistant: showMetadata.assistant || '',
+            director: showMetadata.director || '',
+            producer: showMetadata.producer || '',
+            company: showMetadata.company || ''
           });
         }
       }
@@ -334,6 +341,7 @@ function AppContent({ isSidebarOpen, setIsSidebarOpen, handleLoad, handleSave, h
           <Route path="/app/reports/cutting-list" element={<CuttingListReport />} />
           <Route path="/app/reports/eos-targets" element={<EosTargetsReport />} />
           <Route path="/app/reports/power" element={<PowerReport />} />
+          <Route path="/app/reports/print-center" element={<PrintCenter />} />
           <Route path="/app/fixture-library" element={<FixtureLibrary />} />
           <Route path="/app/dmx-view" element={<DmxUniverseView />} />
           <Route path="/app/patch-notes" element={<PatchNotes />} />

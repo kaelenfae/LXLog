@@ -6,11 +6,28 @@ import { ConfigureColumnsButton, ConfigureColumnsHeader, DraggableColumnItem } f
 import { getGelColor } from '../utils/gelData';
 import { formatAddress } from '../utils/addressFormatter';
 import { useSettings } from '../hooks/useSettings';
+import { HangingSchedulePDF } from './HangingSchedulePDF';
+import { useShowInfo } from '../hooks/useShowInfo';
+import { PDFDownloadButton } from './PDFDownloadButton';
+import { OrientationSelect } from './OrientationSelect';
 
 export function HangingScheduleReport() {
     const [orientation, setOrientation] = React.useState('portrait');
     const [showSwatches, setShowSwatches] = React.useState(false);
-    const { addressMode, showUniverse1, universeSeparator } = useSettings();
+    const [includeCover, setIncludeCover] = React.useState(true);
+    const { addressMode, showUniverse1, universeSeparator, channelDisplayMode } = useSettings();
+
+    const columnLabels = {
+        position: 'Position',
+        unit: 'Unit',
+        type: 'Type',
+        watt: 'Wattage',
+        purpose: 'Purpose',
+        color: 'Color',
+        gobo: 'Gobo',
+        channel: 'Ch',
+        address: 'Addr'
+    };
 
     // Dynamic Columns Support
     const metadata = useLiveQuery(() => db.showMetadata.toArray());
@@ -208,17 +225,7 @@ export function HangingScheduleReport() {
 
     const controls = (
         <div className="flex gap-4 items-center bg-gray-100 p-2 rounded text-xs text-black border border-gray-300">
-            <div className="flex items-center gap-2 pr-4">
-                <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Orientation:</span>
-                <select
-                    value={orientation}
-                    onChange={(e) => setOrientation(e.target.value)}
-                    className="bg-white text-black border border-gray-300 rounded px-2 py-1 cursor-pointer hover:border-indigo-500 focus:outline-none focus:border-indigo-500"
-                >
-                    <option value="landscape">Landscape</option>
-                    <option value="portrait">Portrait</option>
-                </select>
-            </div>
+            <OrientationSelect value={orientation} onChange={setOrientation} />
 
             <ConfigureColumnsButton
                 isOpen={showColumnConfig}
@@ -228,7 +235,7 @@ export function HangingScheduleReport() {
 
                 {/* Show Swatches Toggle */}
                 <div className="mb-3 pb-3 border-b border-gray-200">
-                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1.5 rounded">
                         <input
                             type="checkbox"
                             checked={showSwatches}
@@ -236,6 +243,15 @@ export function HangingScheduleReport() {
                             className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                         />
                         <span className="text-sm font-semibold text-gray-700">Show Color Swatches</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1.5 rounded mt-1">
+                        <input
+                            type="checkbox"
+                            checked={includeCover}
+                            onChange={(e) => setIncludeCover(e.target.checked)}
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="text-sm font-semibold text-gray-700">Include Cover Page</span>
                     </label>
                 </div>
 
@@ -290,19 +306,29 @@ export function HangingScheduleReport() {
         return columnOrder.filter(id => visibleColumns[id]);
     }, [columnOrder, visibleColumns]);
 
-    if (!instruments || !hasSetDefaults) return <div>Loading...</div>;
+    const { showInfo } = useShowInfo();
 
-    const columnLabels = {
-        position: 'Position',
-        unit: 'Unit',
-        type: 'Type',
-        watt: 'Wattage',
-        purpose: 'Purpose',
-        color: 'Color',
-        gobo: 'Gobo',
-        channel: 'Ch',
-        address: 'Addr'
-    };
+    if (!instruments || !hasSetDefaults) return <div className="p-8 text-gray-500">Loading...</div>;
+
+    const pdfBtn = instruments ? (
+        <PDFDownloadButton
+            document={
+                <HangingSchedulePDF
+                    showInfo={showInfo}
+                    instruments={instruments}
+                    visibleColumns={visibleColumns}
+                    columnLabels={columnLabels}
+                    includeCover={includeCover}
+                    orientation={orientation}
+                    channelDisplayMode={channelDisplayMode}
+                    addressMode={addressMode}
+                    showUniverse1={showUniverse1}
+                    universeSeparator={universeSeparator}
+                />
+            }
+            fileName={`${(showInfo.name || 'Show').replace(/\s+/g, '_')}_HangingSchedule.pdf`}
+        />
+    ) : null;
 
     const renderCell = (inst, columnId) => {
         switch (columnId) {
@@ -324,7 +350,15 @@ export function HangingScheduleReport() {
                     </span>
                 );
             case 'gobo': return inst.gobo;
-            case 'channel': return inst.channel;
+            case 'channel': {
+                const isPart = inst.part > 1;
+                if (isPart) {
+                    if (channelDisplayMode === 'parts') return <span className="text-indigo-600 font-bold">P{inst.part}</span>;
+                    if (channelDisplayMode === 'dots') return <span className="text-indigo-600 font-bold">.{inst.part}</span>;
+                    if (channelDisplayMode === 'hide') return '';
+                }
+                return inst.channel;
+            }
             case 'address':
                 if (!inst.address || inst.address.trim() === '') {
                     return (
@@ -359,7 +393,7 @@ export function HangingScheduleReport() {
     };
 
     return (
-        <ReportLayout title="Hanging Schedule" controls={controls} orientation={orientation}>
+        <ReportLayout title="Hanging Schedule" controls={controls} orientation={orientation} pdfButton={pdfBtn}>
             {positions.map(position => (
                 <div
                     key={position}
@@ -410,6 +444,23 @@ export function HangingScheduleReport() {
                                 </tr>
                             ))}
                         </tbody>
+                        <tfoot>
+                            <tr className="bg-gray-100 border-t border-black font-bold">
+                                <td colSpan={visibleColumnIds.length - 1} className="p-1 px-4 text-right uppercase tracking-wider text-[10px] text-gray-500">
+                                    Section Totals:
+                                </td>
+                                <td className="p-1 text-[10px] whitespace-nowrap">
+                                    <div className="flex flex-col">
+                                        <span>{groupedByPosition[position].length} Units</span>
+                                        {groupedByPosition[position].reduce((sum, inst) => sum + (parseInt(inst.watt) || 0), 0) > 0 && (
+                                            <span className="text-indigo-600">
+                                                {groupedByPosition[position].reduce((sum, inst) => sum + (parseInt(inst.watt) || 0), 0).toLocaleString()} Watts
+                                            </span>
+                                        )}
+                                    </div>
+                                </td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             ))}

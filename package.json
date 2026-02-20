@@ -2,7 +2,7 @@
   "name": "developmentantigravity",
   "description": "Lighting Database and Logger",
   "author": "LXLog Team",
-  "version": "0.3.5",
+  "version": "0.4.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,6 +14,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@react-pdf/renderer": "^4.3.2",
     "@tanstack/react-virtual": "^3.13.14",
     "classnames": "^2.5.1",
     "dexie": "^4.2.1",

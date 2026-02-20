@@ -2,14 +2,20 @@ import React from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { ReportLayout } from './ReportLayout';
+import { EosTargetsPDF } from './EosTargetsPDF';
+import { useShowInfo } from '../hooks/useShowInfo';
+import { PDFDownloadButton } from './PDFDownloadButton';
+import { OrientationSelect } from './OrientationSelect';
 
 export function EosTargetsReport() {
     const [orientation, setOrientation] = React.useState('portrait');
     const [filter, setFilter] = React.useState('all'); // 'all', 'Group', 'Preset', 'Sub'
+    const [includeCover, setIncludeCover] = React.useState(true);
 
     const targets = useLiveQuery(() => db.eosTargets.toArray());
+    const { showInfo } = useShowInfo();
 
-    if (!targets) return <div className="p-8 text-center text-[var(--text-secondary)]">Loading...</div>;
+    if (!targets) return <div className="p-8 text-gray-500">Loading...</div>;
 
     if (targets.length === 0) {
         return (
@@ -103,22 +109,38 @@ export function EosTargetsReport() {
 
             <div className="h-4 w-px bg-gray-300"></div>
 
-            <div className="flex items-center gap-2">
-                <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Orientation:</span>
-                <select
-                    value={orientation}
-                    onChange={(e) => setOrientation(e.target.value)}
-                    className="bg-white text-black border border-gray-300 rounded px-2 py-1 cursor-pointer hover:border-indigo-500 focus:outline-none focus:border-indigo-500"
-                >
-                    <option value="portrait">Portrait</option>
-                    <option value="landscape">Landscape</option>
-                </select>
-            </div>
+            <OrientationSelect value={orientation} onChange={setOrientation} />
+
+            <label className="flex items-center gap-2 cursor-pointer select-none border-l border-gray-300 pl-4">
+                <input
+                    type="checkbox"
+                    checked={includeCover}
+                    onChange={(e) => setIncludeCover(e.target.checked)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                />
+                <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Cover Page</span>
+            </label>
         </div>
     );
 
+    const pdfBtn = (
+        <PDFDownloadButton
+            document={
+                <EosTargetsPDF
+                    showInfo={showInfo}
+                    groups={groups}
+                    presets={presets}
+                    subs={subs}
+                    orientation={orientation}
+                    includeCover={includeCover}
+                />
+            }
+            fileName={`${(showInfo.name || 'Show').replace(/\s+/g, '_')}_EosTargets.pdf`}
+        />
+    );
+
     return (
-        <ReportLayout title="EOS Targets" orientation={orientation} controls={controls}>
+        <ReportLayout title="EOS Targets" orientation={orientation} controls={controls} pdfButton={pdfBtn}>
             <div className="bg-white text-black min-h-full p-6">
                 {showGroups && <TargetSection title="Groups" items={groups} color="#10b981" bgColor="#059669" />}
                 {showPresets && <TargetSection title="Presets" items={presets} color="#8b5cf6" bgColor="#7c3aed" />}

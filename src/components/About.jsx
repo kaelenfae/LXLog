@@ -108,8 +108,8 @@ export function About() {
                                         <h5 className="font-semibold text-[var(--text-primary)] mb-2">Views & Reports</h5>
                                         <ul className="list-disc list-inside space-y-1 ml-2">
                                             <li><strong>Instrument Schedule:</strong> Main spreadsheet view of all equipment. Sort by clicking column headers.</li>
-                                            <li><strong>Channel Hookup:</strong> View organized by channel, with multi-part channels grouped together.</li>
-                                            <li><strong>Reports:</strong> Generate printable paperwork via the sidebar (Magic Sheet, Hanging Schedule, Patch).</li>
+                                            <li><strong>Print Center:</strong> Bundle multiple reports into a single, professional PDF with custom cover pages.</li>
+                                            <li><strong>Reports:</strong> Generate specialized paperwork like Channel Hookups, Hanging Schedules, and Patch reports.</li>
                                         </ul>
                                     </div>
 

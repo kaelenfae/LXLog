@@ -6,6 +6,10 @@ import { ConfigureColumnsButton, ConfigureColumnsHeader, DraggableColumnItem } f
 import { useSettings } from '../hooks/useSettings';
 import { formatAddress } from '../utils/addressFormatter';
 import { getGelColor } from '../utils/gelData';
+import { ChannelHookupPDF } from './ChannelHookupPDF';
+import { useShowInfo } from '../hooks/useShowInfo';
+import { PDFDownloadButton } from './PDFDownloadButton';
+import { OrientationSelect } from './OrientationSelect';
 
 const AVAILABLE_COLUMNS = [
     { id: 'channel', label: 'Channel', width: 'w-16 text-right pr-4', locked: true },
@@ -24,7 +28,8 @@ export function ChannelHookupReport() {
     const [orientation, setOrientation] = useState('portrait');
     const [showColumnConfig, setShowColumnConfig] = useState(false);
     const [showSwatches, setShowSwatches] = useState(true);
-    const { addressMode, showUniverse1, universeSeparator } = useSettings();
+    const [includeCover, setIncludeCover] = useState(true);
+    const { addressMode, showUniverse1, universeSeparator, channelDisplayMode } = useSettings();
 
     // Column configuration state
     const [columnOrder, setColumnOrder] = useState(() => {
@@ -64,17 +69,21 @@ export function ChannelHookupReport() {
         let lastChannel = null;
         return instruments.map(inst => {
             const item = { ...inst };
-            if (item.channel === lastChannel) {
-                item.displayChannel = `.${item.part || 1}`;
-                item.isSecondaryPart = true;
+            const isSecondary = item.channel === lastChannel;
+            item.isSecondaryPart = isSecondary;
+
+            if (isSecondary) {
+                if (channelDisplayMode === 'parts') item.displayChannel = `P${item.part || 1}`;
+                else if (channelDisplayMode === 'dots') item.displayChannel = `.${item.part || 1}`;
+                else if (channelDisplayMode === 'hide') item.displayChannel = '';
+                else item.displayChannel = item.channel; // Show Dups
             } else {
                 item.displayChannel = item.channel || '-';
-                item.isSecondaryPart = false;
                 lastChannel = item.channel;
             }
             return item;
         });
-    }, [instruments]);
+    }, [instruments, channelDisplayMode]);
 
     const handleDragStart = (e, columnId) => {
         if (columnId === 'channel') return; // Channel is locked
@@ -170,17 +179,7 @@ export function ChannelHookupReport() {
 
     const controls = (
         <div className="flex gap-4 items-center bg-gray-100 p-2 rounded text-xs text-black border border-gray-300">
-            <div className="flex items-center gap-2 pr-4">
-                <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Orientation:</span>
-                <select
-                    value={orientation}
-                    onChange={(e) => setOrientation(e.target.value)}
-                    className="bg-white text-black border border-gray-300 rounded px-2 py-1 cursor-pointer hover:border-indigo-500 focus:outline-none focus:border-indigo-500"
-                >
-                    <option value="portrait">Portrait</option>
-                    <option value="landscape">Landscape</option>
-                </select>
-            </div>
+            <OrientationSelect value={orientation} onChange={setOrientation} />
 
             <ConfigureColumnsButton
                 isOpen={showColumnConfig}
@@ -198,6 +197,15 @@ export function ChannelHookupReport() {
                             className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                         />
                         <span className="text-sm font-semibold text-gray-700">Show Color Swatches</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded mt-1">
+                        <input
+                            type="checkbox"
+                            checked={includeCover}
+                            onChange={(e) => setIncludeCover(e.target.checked)}
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="text-sm font-semibold text-gray-700">Include Cover Page</span>
                     </label>
                 </div>
 
@@ -226,10 +234,27 @@ export function ChannelHookupReport() {
         </div>
     );
 
-    if (!instruments) return <div className="p-8 text-gray-500">Loading Hookup Data...</div>;
+    const { showInfo } = useShowInfo();
+
+    if (!instruments) return <div className="p-8 text-gray-500">Loading...</div>;
+
+    const pdfBtn = (
+        <PDFDownloadButton
+            document={
+                <ChannelHookupPDF
+                    showInfo={showInfo}
+                    processedData={processedData}
+                    visibleColumnOrder={visibleColumnOrder}
+                    orientation={orientation}
+                    includeCover={includeCover}
+                />
+            }
+            fileName={`${(showInfo.name || 'Show').replace(/\s+/g, '_')}_ChannelHookup.pdf`}
+        />
+    );
 
     return (
-        <ReportLayout title="Channel Hookup" controls={controls} orientation={orientation}>
+        <ReportLayout title="Channel Hookup" controls={controls} orientation={orientation} pdfButton={pdfBtn}>
             <div className="w-full overflow-visible">
                 <table className="w-full text-left border-collapse border-b-2 border-black">
                     <thead>

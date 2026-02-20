@@ -39,6 +39,10 @@ export function Sidebar() {
                 Reports
             </div>
             <nav className="flex-none flex flex-col gap-1 overflow-y-auto mb-4">
+                <NavLink to="/app/reports/print-center" className={navItemClass}>
+                    🖨️ Print Center
+                </NavLink>
+                <div className="h-px bg-[var(--border-subtle)] my-1"></div>
                 <NavLink to="/app/reports/channel-hookup" className={navItemClass}>
                     Channel Hookup
                 </NavLink>

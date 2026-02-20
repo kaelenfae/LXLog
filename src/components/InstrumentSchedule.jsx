@@ -101,7 +101,7 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     const [contextMenu, setContextMenu] = useState(null); // { x, y, instrument }
 
     // Interface Settings
-    const { isCompact, addressMode, showUniverse1, channelDisplayMode, universeSeparator, showCells } = useSettings();
+    const { isCompact, addressMode, showUniverse1, channelDisplayMode, universeSeparator } = useSettings();
 
     // Persist Visible Columns and Widths
     useEffect(() => {
@@ -339,16 +339,8 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
             const isMultiPartGroup = multiPartChannels.has(inst.channel);
             const isPart = inst.part > 1;
 
-            // Determine if this is a "Cell" (different type from master) or "Standard Part" (same type)
-            // Default to Part if types are missing, or Cell if types explicitly differ.
-            const isCell = isPart && (inst.type !== groupMaster.type);
-            const isStandardPart = isPart && !isCell;
-
-            // Filter cells if toggle is off
-            if (isCell && !showCells) return;
-
             // EOS-style: Header Row for Standard Parts (Duplicates)
-            if (isGroupStart && isMultiPartGroup && channelDisplayMode === 'parts') {
+            if (isGroupStart && isMultiPartGroup && (channelDisplayMode === 'parts' || channelDisplayMode === 'dots')) {
                 items.push({ type: 'header', value: inst.channel, id: `header-${inst.channel}-${index}` });
             }
 
@@ -356,17 +348,51 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                 items.push({ type: 'spacer', id: `spacer-${index}` });
             }
 
+            // OPTIMIZATION: Pre-calculate address display values
+            let formattedAddress = '';
+            let addressRange = null;
+
+            if (inst.address) {
+                // Ensure we handle invalid/empty addresses gracefully
+                if (inst.address !== '0:0' && inst.address !== '0') {
+                    formattedAddress = formatAddress(inst.address, addressMode, showUniverse1, universeSeparator);
+
+                    const footprint = parseInt(inst.dmxFootprint) || 1;
+                    if (footprint > 1) {
+                        const rawAddr = String(inst.address);
+                        const isUniv = /[:/]/.test(rawAddr);
+
+                        if (isUniv) {
+                            const parts = rawAddr.split(/[:/]/);
+                            const univ = parts[0];
+                            const start = parseInt(parts[1]);
+                            const end = start + footprint - 1;
+                            addressRange = `${univ}${universeSeparator}${start} – ${univ}${universeSeparator}${end}`;
+                        } else {
+                            const start = parseInt(rawAddr);
+                            if (!isNaN(start)) {
+                                addressRange = `${start} – ${start + footprint - 1}`;
+                            }
+                        }
+                    }
+                } else {
+                    // Start rendering 0:0/0 just like before (yellow warning style handling remains in render)
+                    formattedAddress = inst.address;
+                }
+            }
+
             items.push({
                 type: 'instrument',
                 data: inst,
                 id: inst.id,
-                isCell,
-                isStandardPart,
-                isMultiPartGroup
+                isPart,
+                isMultiPartGroup,
+                formattedAddress,
+                addressRange
             });
         });
         return items;
-    }, [filteredInstruments, sortField, multiPartChannels, showCells, channelDisplayMode]);
+    }, [filteredInstruments, sortField, multiPartChannels, channelDisplayMode, addressMode, showUniverse1, universeSeparator]);
 
     const rowVirtualizer = useVirtualizer({
         count: rowItems.length,
@@ -799,7 +825,6 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                             const inst = item.data;
                             // Extract flags from item metadata
                             const isMultiPartGroup = item.isMultiPartGroup;
-                            const isCell = item.isCell;
 
                             const isAddrDuplicate = inst.address && inst.address !== '0:0' && inst.address !== '0' && addressCounts[inst.address] > 1;
                             const isChanDuplicate = inst.channel && channelCounts[String(inst.channel)] > 1;
@@ -850,14 +875,22 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                                         };
 
                                         if (col.id === 'channel') {
-                                            // Show as part if it's in a standard duplicate group OR if it's a Cell
-                                            const showAsPart = (isMultiPartGroup && channelDisplayMode === 'parts') || isCell;
+                                            // Show as part if it's in a standard duplicate group
+                                            const isPartMode = channelDisplayMode === 'parts' || channelDisplayMode === 'dots';
+                                            const showAsPart = isMultiPartGroup && isPartMode;
 
-                                            // Indentation styles for parts/cells
+                                            // Hide duplicate channel if mode is 'hide' and it's not the first in group
+                                            const shouldHide = channelDisplayMode === 'hide' && !isGroupStart && isMultiPartGroup;
+
+                                            // Indentation styles for parts
                                             const partStyles = showAsPart ? {
                                                 paddingLeft: '24px',
                                                 position: 'relative'
                                             } : {};
+
+                                            if (shouldHide) {
+                                                return <td key={col.id} className={cellClass} {...commonProps}></td>;
+                                            }
 
                                             return (
                                                 <td key={col.id} className={cellClass} {...commonProps} style={partStyles}>
@@ -865,12 +898,9 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                                                         <div className="absolute left-0 top-0 bottom-0 w-[12px] border-b-2 border-l-2 border-[var(--border-subtle)] rounded-bl-sm mb-[50%] ml-3 opacity-30 pointer-events-none"></div>
                                                     )}
                                                     <div className="flex items-center gap-1">
-                                                        {(!isCell && !showAsPart && inst.type && (inst.type.includes('MC') || inst.type.includes('MultiCell'))) && (
-                                                            <span className="text-[var(--accent-primary)] text-[10px]">▼</span>
-                                                        )}
                                                         {showAsPart ? (
                                                             <span className="font-bold text-[var(--accent-primary)] text-xs tracking-wider">
-                                                                {isCell ? `.${inst.part}` : `P${inst.part || 1}`}
+                                                                {channelDisplayMode === 'dots' ? `.${inst.part}` : `P${inst.part || 1}`}
                                                             </span>
                                                         ) : (
                                                             <span className={classNames("font-bold font-mono", { "text-[var(--error)]": isChanDuplicate, "text-[var(--success)]": !isChanDuplicate })}>{inst.channel}</span>
@@ -881,36 +911,8 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                                         }
 
                                         if (col.id === 'address') {
-                                            const footprint = parseInt(inst.dmxFootprint) || 1;
-                                            const displayAddr = formatAddress(inst.address, addressMode, showUniverse1, universeSeparator);
-
-                                            // Footprint Range Logic (similar to Detail Panel)
-                                            let rangeNode = null;
-                                            if (footprint > 1 && inst.address) {
-                                                const rawAddr = String(inst.address);
-                                                const isUniv = /[:/]/.test(rawAddr);
-
-                                                if (isUniv) {
-                                                    const parts = rawAddr.split(/[:/]/);
-                                                    const univ = parts[0];
-                                                    const start = parseInt(parts[1]);
-                                                    const end = start + footprint - 1;
-                                                    rangeNode = (
-                                                        <div className="text-[9px] opacity-70 font-bold text-[var(--accent-primary)] leading-none mt-0.5">
-                                                            {univ}{universeSeparator}{start} – {univ}{universeSeparator}{end}
-                                                        </div>
-                                                    );
-                                                } else {
-                                                    const start = parseInt(rawAddr);
-                                                    if (!isNaN(start)) {
-                                                        rangeNode = (
-                                                            <div className="text-[9px] opacity-70 font-bold text-[var(--accent-primary)] leading-none mt-0.5">
-                                                                {start} – {start + footprint - 1}
-                                                            </div>
-                                                        );
-                                                    }
-                                                }
-                                            }
+                                            const displayAddr = item.formattedAddress || '';
+                                            const rangeStr = item.addressRange;
 
                                             return (
                                                 <td key={col.id} className={classNames(cellClass, "font-mono", {
@@ -919,7 +921,11 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                                                 })} {...commonProps}>
                                                     <div className="flex flex-col justify-center h-full">
                                                         <div className="leading-tight">{displayAddr}</div>
-                                                        {rangeNode}
+                                                        {rangeStr && (
+                                                            <div className="text-[9px] opacity-70 font-bold text-[var(--accent-primary)] leading-none mt-0.5">
+                                                                {rangeStr}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </td>
                                             );

@@ -2,10 +2,16 @@ import React from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { ReportLayout } from './ReportLayout';
+import { PowerReportPDF } from './PowerReportPDF';
+import { useShowInfo } from '../hooks/useShowInfo';
+import { PDFDownloadButton } from './PDFDownloadButton';
+import { OrientationSelect } from './OrientationSelect';
 
 export function PowerReport() {
     const [orientation, setOrientation] = React.useState('portrait');
+    const [includeCover, setIncludeCover] = React.useState(true);
     const instruments = useLiveQuery(() => db.instruments.toArray());
+    const { showInfo } = useShowInfo();
 
     const summary = React.useMemo(() => {
         if (!instruments) return [];
@@ -31,27 +37,44 @@ export function PowerReport() {
             }));
     }, [instruments]);
 
-    if (!instruments) return <div>Loading...</div>;
+    if (!instruments) return <div className="p-8 text-gray-500">Loading...</div>;
 
     const totalDevices = summary.reduce((acc, curr) => acc + curr.count, 0);
     const totalWatts = summary.reduce((acc, curr) => acc + curr.watts, 0);
 
     const controls = (
         <div className="flex gap-4 items-center bg-gray-100 p-2 rounded text-xs text-black border border-gray-300">
-            <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Orientation:</span>
-            <select
-                value={orientation}
-                onChange={(e) => setOrientation(e.target.value)}
-                className="bg-white text-black border border-gray-300 rounded px-2 py-1 cursor-pointer hover:border-indigo-500 focus:outline-none focus:border-indigo-500"
-            >
-                <option value="portrait">Portrait</option>
-                <option value="landscape">Landscape</option>
-            </select>
+            <OrientationSelect value={orientation} onChange={setOrientation} />
+            <label className="flex items-center gap-2 cursor-pointer select-none border-l border-gray-300 pl-4">
+                <input
+                    type="checkbox"
+                    checked={includeCover}
+                    onChange={(e) => setIncludeCover(e.target.checked)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                />
+                <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Cover Page</span>
+            </label>
         </div>
     );
 
+    const pdfBtn = (
+        <PDFDownloadButton
+            document={
+                <PowerReportPDF
+                    showInfo={showInfo}
+                    summary={summary}
+                    totalDevices={totalDevices}
+                    totalWatts={totalWatts}
+                    orientation={orientation}
+                    includeCover={includeCover}
+                />
+            }
+            fileName={`${(showInfo.name || 'Show').replace(/\s+/g, '_')}_PowerReport.pdf`}
+        />
+    );
+
     return (
-        <ReportLayout title="Power Report" orientation={orientation} controls={controls}>
+        <ReportLayout title="Power Report" orientation={orientation} controls={controls} pdfButton={pdfBtn}>
             <div className="max-w-3xl mx-auto">
                 <table className="w-full text-left text-sm border-collapse">
                     <thead>
