@@ -2,6 +2,11 @@
 
 All notable changes to LXLog will be documented in this file.
 
+## [0.4.2] - 2026-02-21
+
+### Fixed
+- Fixed magic sheet rendering bugs.
+
 ## [0.4.1] - 2026-02-19
 
 ### Added

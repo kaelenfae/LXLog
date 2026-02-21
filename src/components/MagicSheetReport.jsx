@@ -434,7 +434,6 @@ export function MagicSheetReport() {
                                 const config = purposeConfigs[group.purpose] || {
                                     sortOrder: 'numerical',
                                     fillDirection: 'bottom',
-                                    gridCols: 5,
                                     isLocked: false,
                                     isHidden: false
                                 };
@@ -468,10 +467,10 @@ export function MagicSheetReport() {
                                         isMenuOpen={isEditing}
                                         onMenuClick={() => setEditingPurpose(isEditing ? null : group.purpose)}
                                     >
-                                        <div className={`mb-6 print:mb-2 inline-block w-full break-inside-avoid rounded-xl bg-white print:border-black print:bg-transparent shadow-lg print:shadow-none overflow-hidden border border-gray-200 pl-10 print:pl-0 ${config.isHidden ? 'opacity-40 print:hidden' : ''}`}>
+                                        <div className={`mb-6 print:mb-2 inline-block w-full break-inside-avoid rounded-xl bg-white print:border-black print:bg-transparent shadow-lg print:shadow-none border border-gray-200 pl-10 print:pl-0 ${config.isHidden ? 'opacity-40 print:hidden' : ''}`}>
                                             {/* Gradient Header */}
                                             <div
-                                                className="px-4 py-3 print:py-1.5 flex items-center justify-between"
+                                                className="px-4 py-3 print:py-1.5 flex items-center justify-between overflow-hidden rounded-t-xl"
                                                 style={{
                                                     background: `linear - gradient(135deg, ${accentColor}22 0 %, ${accentColor}08 100 %)`,
                                                     borderBottom: `3px solid ${accentColor} `
@@ -492,10 +491,10 @@ export function MagicSheetReport() {
                                                 </div>
                                             </div>
 
-                                            {/* Content Area */}
-                                            <div className="p-4 print:p-2">
+                                            {/* Content Area - relative wrapper so overlay is positioned correctly */}
+                                            <div className="p-4 print:p-2 relative">
                                                 {isEditing && (
-                                                    <div className="mb-3 p-3 bg-white border border-gray-300 rounded space-y-3 print:hidden shadow-lg box-border">
+                                                    <div className="absolute top-0 left-0 z-50 w-72 p-3 bg-white border border-gray-300 rounded space-y-3 print:hidden shadow-xl">
                                                         <div className="pb-3 border-b border-gray-200 flex gap-4">
                                                             <label className="flex items-center gap-2 cursor-pointer">
                                                                 <input
@@ -575,8 +574,9 @@ export function MagicSheetReport() {
                                                 )}
 
                                                 {(() => {
-                                                    const cols = config.gridCols || 5;
                                                     const totalItems = displayItems.length;
+                                                    const defaultCols = (totalItems === 3 || totalItems === 4) ? totalItems : 5;
+                                                    const cols = config.gridCols ?? defaultCols;
                                                     const totalRows = Math.ceil(totalItems / cols);
                                                     const itemsInLastRow = totalItems % cols || cols;
 
@@ -617,16 +617,32 @@ export function MagicSheetReport() {
                             });
 
                             // Distribute into columns Left-to-Right
-                            const layoutCols = Array.from({ length: numCols }, () => []);
-                            sortedGroupElements.forEach((el, index) => {
-                                layoutCols[index % numCols].push(el);
+                            // CSS Grid layout with native column spanning for wide cards
+                            const sortedWithConfig = [...processedGroups].sort((a, b) => {
+                                const aH = (purposeConfigs[a.purpose] || {}).isHidden ? 1 : 0;
+                                const bH = (purposeConfigs[b.purpose] || {}).isHidden ? 1 : 0;
+                                return aH - bH;
+                            }).map(group => {
+                                const cfg = purposeConfigs[group.purpose] || {};
+                                const span = cfg.cardWidth === 'full' ? numCols : cfg.cardWidth === '2/3' ? Math.max(1, Math.round(numCols * 2 / 3)) : 1;
+                                return { group, span };
                             });
 
                             return (
-                                <div className="flex gap-6 print:gap-2 w-full items-start">
-                                    {layoutCols.map((col, i) => (
-                                        <div key={`col-${i}`} className="flex-1 flex flex-col gap-6 print:gap-2 min-w-0">
-                                            {col}
+                                <div
+                                    className="w-full"
+                                    style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: `repeat(${numCols}, minmax(0, 1fr))`,
+                                        gap: '1.5rem',
+                                    }}
+                                >
+                                    {sortedGroupElements.map((el, idx) => (
+                                        <div
+                                            key={sortedWithConfig[idx]?.group.purpose}
+                                            style={{ gridColumn: `span ${sortedWithConfig[idx]?.span || 1}` }}
+                                        >
+                                            {el}
                                         </div>
                                     ))}
                                 </div>

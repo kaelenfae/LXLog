@@ -3,6 +3,14 @@ import { useNavigate } from 'react-router-dom';
 
 const PATCH_NOTES = [
     {
+        version: "0.4.2",
+        date: "2026-02-21",
+        title: "Magic Sheet Bug Fixes",
+        changes: [
+            "Fixed magic sheet rendering bugs.",
+        ]
+    },
+    {
         version: "0.4.1",
         date: "2026-02-19",
         title: "Print Center & Flexible Tracking",
