@@ -2,6 +2,11 @@
 
 All notable changes to LXLog will be documented in this file.
 
+## [Unreleased] — feature/mvr-import
+
+### Added
+- **MVR Import**: Import instrument data from `.mvr` (My Virtual Rig) files exported by Vectorworks, MA3, and other MVR-compatible tools. Fixtures are mapped to LXLog fields: `Layer name` → Position, `FixtureID` → Channel, `GDTFSpec` model → Type, `Fixture name` → Purpose, `UnitNumber` → Unit, and `Address` → DMX address in `Universe.Address` format. Supports both Create-New and Merge import modes.
+
 ## [0.4.2] - 2026-02-21
 
 ### Fixed

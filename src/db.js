@@ -547,6 +547,142 @@ export const importMa2Xml = async (xmlString, merge = false) => {
     }
 };
 
+export const importMvr = async (arrayBuffer, merge = false) => {
+    try {
+        const JSZip = (await import('jszip')).default;
+        const zip = await JSZip.loadAsync(arrayBuffer);
+
+        // MVR archives must contain GeneralSceneDescription.xml
+        const xmlFile = zip.file('GeneralSceneDescription.xml');
+        if (!xmlFile) throw new Error('No GeneralSceneDescription.xml found in MVR archive');
+
+        const xmlString = await xmlFile.async('string');
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+
+        // Check for XML parse errors
+        const parseError = xmlDoc.querySelector('parsererror');
+        if (parseError) throw new Error('Failed to parse GeneralSceneDescription.xml');
+
+        const instruments = [];
+
+        // Build UUID → name lookup from AUXData > Positions.
+        // Vectorworks stores a UUID in each Fixture's <Position> child element.
+        const positionMap = {};
+        xmlDoc.querySelectorAll('Positions > Position').forEach(pos => {
+            const uuid = pos.getAttribute('uuid');
+            const name = pos.getAttribute('name');
+            if (uuid && name) positionMap[uuid] = name;
+        });
+
+        /**
+         * Parse an MVR Address text into "Universe.Address" string.
+         * Can be absolute integer (e.g. "829") or already "Universe.Address" (e.g. "2.317").
+         */
+        const parseAddress = (addrText) => {
+            if (!addrText) return '';
+            const trimmed = addrText.trim();
+            if (trimmed.includes('.')) return trimmed;
+            const abs = parseInt(trimmed, 10);
+            if (isNaN(abs) || abs <= 0) return trimmed;
+            const universe = Math.floor((abs - 1) / 512) + 1;
+            const address = ((abs - 1) % 512) + 1;
+            return `${universe}.${address}`;
+        };
+
+        // Flat scan: find every Fixture element anywhere in the document.
+        const allFixtures = xmlDoc.querySelectorAll('Fixture');
+        console.log(`[MVR] Found ${allFixtures.length} Fixture element(s) in document`);
+
+        for (const child of allFixtures) {
+            // Fixture name attribute = instrument model/type (e.g. "ETC Source 4 50°")
+            const fixtureName = child.getAttribute('name') || '';
+
+            // Resolve Position UUID → human-readable position name
+            const positionEl = child.querySelector(':scope > Position');
+            const positionUuid = positionEl ? positionEl.textContent.trim() : '';
+            const position = positionMap[positionUuid] || positionUuid;
+
+            const unitNumberEl = child.querySelector(':scope > UnitNumber');
+            const functionEl = child.querySelector(':scope > Function');
+            const addressEl = child.querySelector(':scope > Addresses > Address');
+            const gdtfSpecEl = child.querySelector(':scope > GDTFSpec');
+            const fixtureIdNumericEl = child.querySelector(':scope > FixtureIDNumeric');
+            const fixtureIdEl = child.querySelector(':scope > FixtureID');
+            const customIdEl = child.querySelector(':scope > CustomId');
+            const customIdTypeEl = child.querySelector(':scope > CustomIdType');
+
+            // Channel resolution priority (per github.com/mvrdevelopment/spec):
+            //   FixtureIDNumeric = Integer channel for programming (preferred)
+            //   FixtureID        = String label — parse as int if possible
+            //   CustomId + CustomIdType=2 = Channel-type custom identifier
+            const fixtureIdNumeric = fixtureIdNumericEl ? parseInt(fixtureIdNumericEl.textContent.trim(), 10) : NaN;
+            const fixtureIdStr = fixtureIdEl ? fixtureIdEl.textContent.trim() : '';
+            const fixtureIdAsNum = parseInt(fixtureIdStr, 10);
+            const customIdType = customIdTypeEl ? customIdTypeEl.textContent.trim() : '';
+            const customIdNum = (customIdEl && customIdType === '2') ? parseInt(customIdEl.textContent.trim(), 10) : NaN;
+
+            let channelVal;
+            if (!isNaN(fixtureIdNumeric)) {
+                channelVal = fixtureIdNumeric;
+            } else if (!isNaN(fixtureIdAsNum)) {
+                channelVal = fixtureIdAsNum;
+            } else if (!isNaN(customIdNum)) {
+                channelVal = customIdNum;
+            } else if (fixtureIdStr) {
+                channelVal = fixtureIdStr;
+            } else {
+                console.log(`[MVR] Skipping fixture "${fixtureName}" — no channel identifier found`);
+                continue;
+            }
+
+            // Type: fixture name attr is most human-readable (e.g. Vectorworks = "ETC Source 4 50°").
+            // Fall back to GDTFSpec model portion for tools that omit the name attr.
+            // GDTFSpec format: "Manufacturer@Model.gdtf" — strip prefix and extension.
+            let typeVal = fixtureName;
+            if (!typeVal && gdtfSpecEl) {
+                const spec = gdtfSpecEl.textContent.trim();
+                const model = spec.includes('@') ? spec.split('@').slice(1).join('@') : spec;
+                typeVal = model.replace(/\.gdtf$/i, '').replace(/_/g, ' ');
+            }
+
+            instruments.push({
+                channel: channelVal,
+                address: parseAddress(addressEl ? addressEl.textContent : ''),
+                type: typeVal,
+                position,                           // Resolved from Position UUID
+                purpose: functionEl ? functionEl.textContent.trim() : '',
+                unit: unitNumberEl ? (unitNumberEl.textContent.trim() || '') : '',
+                notes: '',
+                color: '',
+                watt: '',
+                gobo: '',
+                accessory: '',
+                part: 1,
+                proportion: '',
+                curve: '',
+                text1: '', text2: '', text3: '', text4: '', text5: '',
+                text6: '', text7: '', text8: '', text9: '', text10: ''
+            });
+        }
+
+        if (instruments.length === 0) throw new Error('No fixtures with a usable channel identifier found in MVR file');
+
+        // Assign part numbers for fixtures sharing the same channel
+        const channelCounts = {};
+        for (const inst of instruments) {
+            const key = `channel_${inst.channel}`;
+            channelCounts[key] = (channelCounts[key] || 0) + 1;
+            inst.part = channelCounts[key];
+        }
+
+        return await saveInstruments(instruments, merge);
+    } catch (e) {
+        console.error('MVR Import Failed', e);
+        return false;
+    }
+};
+
 export const removeDuplicates = async () => {
     return await db.transaction('rw', db.instruments, async () => {
         const all = await db.instruments.toArray();

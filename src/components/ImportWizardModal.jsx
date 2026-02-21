@@ -27,7 +27,8 @@ const LW_FIELD_MAP = {
 const IMPORT_FORMATS = [
     { id: 'txt', name: 'Lightwright Text (.txt)', ext: '.txt' },
     { id: 'csv', name: 'EOS CSV (.csv)', ext: '.csv' },
-    { id: 'ma2', name: 'MA2 XML (.xml)', ext: '.xml' }
+    { id: 'ma2', name: 'MA2 XML (.xml)', ext: '.xml' },
+    { id: 'mvr', name: 'MVR File (.mvr)', ext: '.mvr' }
 ];
 
 export function ImportWizardModal({ onClose, onConfirm }) {
@@ -143,7 +144,7 @@ export function ImportWizardModal({ onClose, onConfirm }) {
                     setStep(3);
                 }
             } else {
-                // For XML formats, skip field selection and go to mode
+                // For XML and MVR formats, skip field selection and go to mode
                 setStep(3);
             }
         } catch (err) {
@@ -169,7 +170,12 @@ export function ImportWizardModal({ onClose, onConfirm }) {
         reader.onerror = () => {
             setError("Failed to read file");
         };
-        reader.readAsText(selectedFile);
+        // MVR files are binary ZIP archives — must be read as ArrayBuffer
+        if (format === 'mvr') {
+            reader.readAsArrayBuffer(selectedFile);
+        } else {
+            reader.readAsText(selectedFile);
+        }
     };
 
     const toggleField = (fieldName) => {
