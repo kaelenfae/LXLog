@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -10,6 +10,7 @@ import { FilterModal } from './FilterModal';
 import { ContextMenu } from './ContextMenu';
 import { BulkEditPanel } from './BulkEditPanel';
 import { ColorSwatch } from './ColorSwatch';
+import { useToast } from './Toast';
 import classNames from 'classnames';
 
 // Helper Component
@@ -63,6 +64,7 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     const navigate = useNavigate();
     const location = useLocation();
     const parentRef = useRef(null);
+    const toast = useToast();
 
     // State
     const [selectedIds, setSelectedIds] = useState(new Set());
@@ -532,7 +534,7 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
             setSelectedIds(new Set());
         } catch (err) {
             console.error("Batch update failed", err);
-            alert("Failed to update instruments");
+            toast.error("Failed to update instruments");
         }
     };
 
@@ -548,7 +550,7 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
             setSelectedIds(new Set());
         } catch (err) {
             console.error("Duplicate failed", err);
-            alert("Failed to duplicate instruments");
+            toast.error("Failed to duplicate instruments");
         }
     };
 
@@ -590,7 +592,7 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                 setContextMenu(null);
             } catch (err) {
                 console.error("Delete failed", err);
-                alert("Failed to delete instruments");
+                toast.error("Failed to delete instruments");
             }
         }
     };
@@ -601,7 +603,7 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
             await db.instruments.add({ ...rest });
         } catch (err) {
             console.error("Duplicate failed", err);
-            alert("Failed to duplicate instrument");
+            toast.error("Failed to duplicate instrument");
         }
     };
 
@@ -627,7 +629,7 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                 await renumberPosition(position, ids);
             } catch (err) {
                 console.error("Renumber failed", err);
-                alert("Failed to renumber position");
+                toast.error("Failed to renumber position");
             }
         }
     };

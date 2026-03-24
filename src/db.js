@@ -127,11 +127,17 @@ export const seedDatabase = async () => {
 export const exportShow = async () => {
     const instruments = await db.instruments.toArray();
     const metadata = await db.showMetadata.toArray();
+    const eosTargets = await db.eosTargets.toArray();
+    const fixtureLibrary = await db.fixtureLibrary.toArray();
+    const instrumentNotes = await db.instrumentNotes.toArray();
     const showData = {
-        version: 1,
+        version: 2,
         date: new Date().toISOString(),
         metadata: metadata[0] || {},
-        instruments
+        instruments,
+        eosTargets,
+        fixtureLibrary,
+        instrumentNotes
     };
     return JSON.stringify(showData, null, 2);
 };
@@ -149,6 +155,17 @@ export const importShow = async (jsonString) => {
             await db.fixtureLibrary.clear();
             await db.instrumentNotes.clear();
             await db.instruments.bulkAdd(data.instruments);
+
+            // Restore additional tables if present (v2+ format)
+            if (data.eosTargets && Array.isArray(data.eosTargets) && data.eosTargets.length > 0) {
+                await db.eosTargets.bulkAdd(data.eosTargets);
+            }
+            if (data.fixtureLibrary && Array.isArray(data.fixtureLibrary) && data.fixtureLibrary.length > 0) {
+                await db.fixtureLibrary.bulkAdd(data.fixtureLibrary);
+            }
+            if (data.instrumentNotes && Array.isArray(data.instrumentNotes) && data.instrumentNotes.length > 0) {
+                await db.instrumentNotes.bulkAdd(data.instrumentNotes);
+            }
 
             if (data.metadata) {
                 await db.showMetadata.clear();
@@ -289,39 +306,20 @@ export const importEosCsv = async (csvString, merge = false) => {
         }
 
         // === Save to Database ===
+        // Use shared saveInstruments for merge logic, handle EOS targets separately
         await db.transaction('rw', [db.instruments, db.eosTargets, db.fixtureLibrary, db.instrumentNotes], async () => {
             if (!merge) {
-                await db.instruments.clear();
                 await db.eosTargets.clear();
-                await db.fixtureLibrary.clear();
-                await db.instrumentNotes.clear();
             }
 
-            // Save instruments
-            if (!merge) {
-                await db.instruments.bulkAdd(instruments);
-            } else {
-                for (const inst of instruments) {
-                    const query = inst.part
-                        ? db.instruments.where('[channel+part]').equals([inst.channel, inst.part])
-                        : db.instruments.where('channel').equals(inst.channel);
-
-                    const existing = await query.first();
-                    if (existing) {
-                        await db.instruments.update(existing.id, inst);
-                    } else {
-                        await db.instruments.add(inst);
-                    }
-                }
-            }
-
-            // Save EOS targets (always replace, no merge logic for targets)
+            // Save EOS targets (always add, no merge logic for targets)
             if (eosTargets.length > 0) {
                 await db.eosTargets.bulkAdd(eosTargets);
             }
         });
 
-        return true;
+        return await saveInstruments(instruments, merge);
+
     } catch (e) {
         console.error("CSV Import Failed", e);
         return false;

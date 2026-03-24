@@ -3,6 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, resetShow, exportShow, removeDuplicates } from '../db';
 import classNames from 'classnames';
 import { useSettings } from '../hooks/useSettings';
+import { THEME_CLASSES } from '../constants';
+import { useToast } from './Toast';
 import { version } from '../../package.json';
 
 // Theme presets with display colors for preview cards
@@ -34,6 +36,7 @@ export function SettingsModal({ onClose }) {
     const [formData, setFormData] = useState({});
 
     const currentSettings = useSettings();
+    const toast = useToast();
 
     // Interface Settings - locally managed for Cancel/Save workflow
     const [isCompact, setIsCompact] = useState(currentSettings.isCompact);
@@ -77,7 +80,7 @@ export function SettingsModal({ onClose }) {
     });
 
     // Theme class names for applying to HTML (dyslexic is now separate)
-    const THEME_CLASSES = ['light', 'midnight', 'forest', 'sunset', 'ocean', 'lavender', 'hotpink', 'snes', 'colorblind'];
+    // THEME_CLASSES imported from constants.js
 
     // Live theme preview - apply theme immediately when selection changes
     useEffect(() => {
@@ -158,12 +161,6 @@ export function SettingsModal({ onClose }) {
         }
     }, []);
 
-    useEffect(() => {
-        if (metadata && metadata[0]) {
-            setFormData(metadata[0]);
-        }
-    }, [metadata]);
-
     const handleSave = async () => {
         // Safe Merge: Default to existing metadata if formData is incomplete
         const currentData = (metadata && metadata[0]) || {};
@@ -232,8 +229,12 @@ export function SettingsModal({ onClose }) {
         const a = document.createElement('a');
         a.href = url;
         a.download = `backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
         a.click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
     };
 
     if (!metadata) return null;
@@ -795,7 +796,7 @@ export function SettingsModal({ onClose }) {
                                         localStorage.removeItem('magicSheet_canvasMode');
                                         localStorage.removeItem('magicSheet_mergedGroups');
                                         localStorage.removeItem('magicSheet_collapsedGroups');
-                                        alert('Magic Sheet settings cleared. Reload the page to see defaults.');
+                                        toast.success('Magic Sheet settings cleared. Reload the page to see defaults.');
                                     }
                                 }} className="bg-[var(--bg-hover)] border border-[var(--border-default)] px-4 py-2 rounded text-sm hover:text-white transition-colors">
                                     Reset Magic Sheet Settings

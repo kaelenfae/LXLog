@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { THEME_CLASSES, A11Y_CLASSES } from './constants';
 import { Sidebar } from './components/Sidebar';
 import { InstrumentSchedule } from './components/InstrumentSchedule';
 import { ChannelHookupReport } from './components/ChannelHookupReport';
@@ -15,6 +16,7 @@ import { EosTargetsReport } from './components/EosTargetsReport';
 import { PowerReport } from './components/PowerReport';
 import { PatchNotes } from './components/PatchNotes';
 import { db, seedDatabase, exportShow, importShow, createNewShow, importEosCsv, importLightwrightTxt, importMa2Xml } from './db';
+import { ToastProvider, useToast } from './components/Toast';
 import './index.css';
 
 import { LandingPage } from './components/LandingPage';
@@ -37,8 +39,6 @@ function App() {
 
   // Apply theme and accessibility settings on mount and when settings change
   useEffect(() => {
-    const THEME_CLASSES = ['light', 'midnight', 'forest', 'sunset', 'ocean', 'lavender', 'hotpink', 'snes', 'colorblind'];
-    const A11Y_CLASSES = ['dyslexic-mode', 'reduced-motion', 'high-contrast', 'large-text'];
 
     const applySettings = () => {
       const theme = localStorage.getItem('theme') || 'dark';
@@ -60,7 +60,7 @@ function App() {
             document.documentElement.style.setProperty('--border-subtle', customColors['--bg-card']);
             document.documentElement.style.setProperty('--border-default', customColors['--text-secondary'] + '44');
           }
-        } catch (e) { /* ignore parse errors */ }
+        } catch (e) { console.warn('Failed to parse custom theme:', e); }
       } else if (theme !== 'dark') {
         // Add the new theme class (dark uses default :root, no class needed)
         document.documentElement.classList.add(theme);
@@ -89,6 +89,39 @@ function App() {
     window.addEventListener('settingsChanged', applySettings);
     return () => window.removeEventListener('settingsChanged', applySettings);
   }, []);
+
+  const handleNewShow = () => {
+    setShowModal(true);
+  };
+
+  // New unified import handler - just opens the wizard
+  const handleImport = () => {
+    setShowImportModal(true);
+  };
+
+  return (
+    <ToastProvider>
+      <Router>
+        <AppInner
+          isSidebarOpen={isSidebarOpen}
+          setIsSidebarOpen={setIsSidebarOpen}
+          handleNewShow={handleNewShow}
+          handleImport={handleImport}
+          setShowSettings={setShowSettings}
+          showModal={showModal}
+          setShowModal={setShowModal}
+          showSettings={showSettings}
+          showImportModal={showImportModal}
+          setShowImportModal={setShowImportModal}
+        />
+      </Router>
+    </ToastProvider>
+  );
+}
+
+// Inner component that has access to both Router context and Toast context
+function AppInner({ isSidebarOpen, setIsSidebarOpen, handleNewShow, handleImport, setShowSettings, showModal, setShowModal, showSettings, showImportModal, setShowImportModal }) {
+  const toast = useToast();
 
   const handleSave = async () => {
     const json = await exportShow();
@@ -131,15 +164,10 @@ function App() {
       if (success) {
         window.location.assign('/app');
       } else {
-        alert('Failed to load show file.');
+        toast.error('Failed to load show file.');
       }
     };
     reader.readAsText(file);
-  };
-
-  // New unified import handler - just opens the wizard
-  const handleImport = () => {
-    setShowImportModal(true);
   };
 
   // Process import from wizard
@@ -190,18 +218,14 @@ function App() {
       if (success) {
         window.location.assign('/app');
       } else {
-        alert(errorMsg);
+        toast.error(errorMsg);
       }
     } catch (e) {
       console.error("Import error:", e);
-      alert(errorMsg);
+      toast.error(errorMsg);
     }
 
     setShowImportModal(false);
-  };
-
-  const handleNewShow = () => {
-    setShowModal(true);
   };
 
   const handleCreateShow = async (metadata) => {
@@ -210,7 +234,7 @@ function App() {
   };
 
   return (
-    <Router>
+    <>
       <AppContent
         isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
@@ -232,7 +256,7 @@ function App() {
           onConfirm={processWizardImport}
         />
       )}
-    </Router>
+    </>
   );
 }
 
