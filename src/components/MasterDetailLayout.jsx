@@ -84,7 +84,8 @@ export function MasterDetailLayout({ MasterComponent = InstrumentSchedule }) {
                 )}
                 style={{
                     flex: 1,
-                    minWidth: 0
+                    minWidth: 0,
+                    minHeight: 0
                 }}
             >
                 <MasterComponent

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useOutletContext } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, addNote, getInstrumentNotes } from '../db';
@@ -39,6 +39,9 @@ export function InstrumentDetail() {
         customFields: {}
     });
 
+    const [isAddingCustomField, setIsAddingCustomField] = useState(false);
+    const [newCustomFieldName, setNewCustomFieldName] = useState('');
+
     const multiPartCount = useLiveQuery(
         () => formData.channel ? db.instruments.where('channel').equals(String(formData.channel)).count() : 0,
         [formData.channel]
@@ -78,10 +81,23 @@ export function InstrumentDetail() {
 
     const instrument = isBulk ? null : singleInstrument;
 
-    // Stabilize dependencies to prevent useEffect loops
-    // useLiveQuery returns a new object reference on every render even if data hasn't changed
-    const stableInstrument = useMemo(() => instrument, [JSON.stringify(instrument)]);
-    const stableBulkInstruments = useMemo(() => bulkInstruments, [JSON.stringify(bulkInstruments)]);
+    // Stabilize dependencies to prevent useEffect loops.
+    // useLiveQuery returns a new object reference on every render even if data hasn't changed.
+    // We use a ref-based deep-equality check that is safe for all value types (including Blobs).
+    const useStable = (value) => {
+        const ref = useRef(value);
+        try {
+            if (JSON.stringify(ref.current) !== JSON.stringify(value)) {
+                ref.current = value;
+            }
+        } catch {
+            // If stringify fails (e.g. circular refs), always update
+            ref.current = value;
+        }
+        return ref.current;
+    };
+    const stableInstrument = useStable(instrument);
+    const stableBulkInstruments = useStable(bulkInstruments);
 
     // Load Global Definitions
     const metadata = useLiveQuery(() => db.showMetadata.toArray());
@@ -232,6 +248,7 @@ export function InstrumentDetail() {
 
     const [showDupConfirm, setShowDupConfirm] = useState(false);
     const [pendingSaveData, setPendingSaveData] = useState(null);
+    const [pendingDeleteContext, setPendingDeleteContext] = useState(null); // null | 'single' | 'bulk'
 
     const handleSave = async (forceSave = false) => {
         if (isBulk) {
@@ -371,25 +388,35 @@ export function InstrumentDetail() {
         navigate('..');
     };
 
-    const handleDelete = async () => {
+    const handleDelete = () => {
+        // Show inline confirm instead of browser dialog
+        setPendingDeleteContext(isBulk ? 'bulk' : 'single');
+    };
+
+    const handleDeleteConfirmed = async () => {
+        setPendingDeleteContext(null);
         if (isBulk) {
-            if (window.confirm(`Are you sure you want to delete ${bulkIds.length} instruments?`)) {
-                await db.instruments.bulkDelete(bulkIds);
-                navigate('..');
-            }
+            await db.instruments.bulkDelete(bulkIds);
+            // Cascade-delete orphaned notes
+            await db.instrumentNotes.where('instrumentId').anyOf(bulkIds).delete();
+            navigate('..');
             return;
         }
-        if (!isNew && window.confirm("Are you sure you want to delete this instrument?")) {
+        if (!isNew) {
             await db.instruments.delete(Number(id));
+            await db.instrumentNotes.where('instrumentId').equals(Number(id)).delete();
             navigate('..');
         }
     };
 
-    const handleAddCustomField = async () => {
-        const name = window.prompt("Enter new field name:");
-        if (!name || !name.trim()) return;
+    const handleAddCustomFieldSubmit = async () => {
+        if (!newCustomFieldName || !newCustomFieldName.trim()) {
+            setIsAddingCustomField(false);
+            setNewCustomFieldName('');
+            return;
+        }
 
-        const trimmedName = name.trim();
+        const trimmedName = newCustomFieldName.trim();
 
         // Update DB
         const currentMeta = metadata && metadata[0] ? metadata[0] : {};
@@ -399,29 +426,57 @@ export function InstrumentDetail() {
             const newDefs = [...currentDefs, trimmedName];
             await db.showMetadata.put({
                 ...currentMeta,
-                // Ensure we have a valid key if it's new. Use 1 as singleton ID if undefined.
-                // If currentMeta exists, it has id. If not, dexie will auto-inc if we don't specify, 
-                // but we prefer singleton logic. Let's just put it.
-                // If it's empty, we might want to ensure we don't create duplicates.
-                // Simple approach: ID 1.
                 id: currentMeta.id || 1,
                 customFieldDefinitions: newDefs
             });
         }
+        setIsAddingCustomField(false);
+        setNewCustomFieldName('');
     };
 
     return (
         <div className="h-full flex flex-col bg-[var(--bg-card)] border-l border-[var(--border-subtle)]">
+            {/* Inline Delete Confirmation */}
+            {pendingDeleteContext && (
+                <div className="bg-red-900/40 border-b border-red-500/40 px-6 py-3 flex items-center justify-between shrink-0">
+                    <span className="text-sm text-red-300 font-medium">
+                        {pendingDeleteContext === 'bulk'
+                            ? `Delete ${bulkIds.length} instruments? This cannot be undone.`
+                            : 'Delete this instrument? This cannot be undone.'}
+                    </span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setPendingDeleteContext(null)}
+                            className="px-3 py-1 text-xs text-[var(--text-secondary)] hover:text-white border border-[var(--border-subtle)] rounded transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleDeleteConfirmed}
+                            className="px-3 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded transition-colors font-semibold"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            )}
             {/* Panel Header */}
             <div className="h-14 border-b border-[var(--border-subtle)] flex items-center px-6 justify-between bg-[var(--bg-card)] shrink-0">
                 <div className="flex items-center gap-3">
                     {onToggleDetail && (
                         <button
-                            onClick={onToggleDetail}
+                            onClick={() => {
+                                if (window.innerWidth < 768) {
+                                    navigate('/app');
+                                } else {
+                                    onToggleDetail();
+                                }
+                            }}
                             className="p-1.5 rounded-md hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors mr-1"
-                            title="Collapse Details"
+                            title="Go Back"
                         >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                            <svg className="w-5 h-5 hidden md:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                            <svg className="w-5 h-5 block md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                         </button>
                     )}
                     <h2 className="text-lg font-semibold text-[var(--text-primary)]">
@@ -683,7 +738,7 @@ export function InstrumentDetail() {
                                                                 <div className="space-y-0.5">
                                                                     {mode.channels.map((ch, idx) => (
                                                                         <div key={idx} className="flex text-[10px] font-mono">
-                                                                            <span className="w-6 text-[var(--accent-primary)]">{ch.dmxAddress}</span>
+                                                                            <span className="w-6 text-[var(--accent-primary)]">{ch.index}</span>
                                                                             <span className="text-[var(--text-secondary)] flex-1">{ch.attribute}</span>
                                                                             {ch.resolution && <span className="text-[var(--text-tertiary)]">{ch.resolution}</span>}
                                                                         </div>
@@ -737,17 +792,58 @@ export function InstrumentDetail() {
                             </>
                         )}
 
-                        {/* Add Custom Field Button */}
-                        <div className="flex justify-start pt-2">
-                            <button
-                                type="button"
-                                onClick={handleAddCustomField}
-                                className="text-xs text-[var(--accent-primary)] hover:text-[var(--accent-hover)] font-medium flex items-center gap-1"
-                            >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                Add Custom Field
-                            </button>
-                        </div>
+                        {/* Add Custom Field Inline Menu */}
+                        {isAddingCustomField ? (
+                            <div className="flex items-center gap-2 pt-2">
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    value={newCustomFieldName}
+                                    onChange={(e) => setNewCustomFieldName(e.target.value)}
+                                    placeholder="Field name..."
+                                    className="flex-1 px-3 py-1.5 bg-[var(--bg-app)] border border-[var(--border-subtle)] rounded-lg text-sm text-[var(--text-primary)] placeholder-gray-500 focus:border-[var(--accent-primary)] outline-none"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleAddCustomFieldSubmit();
+                                        } else if (e.key === 'Escape') {
+                                            setIsAddingCustomField(false);
+                                            setNewCustomFieldName('');
+                                        }
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleAddCustomFieldSubmit}
+                                    className="p-1.5 text-green-500 hover:bg-green-500/20 rounded transition-colors"
+                                    title="Save Field"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsAddingCustomField(false);
+                                        setNewCustomFieldName('');
+                                    }}
+                                    className="p-1.5 text-red-500 hover:bg-red-500/20 rounded transition-colors"
+                                    title="Cancel"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="flex justify-start pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAddingCustomField(true)}
+                                    className="text-xs text-[var(--accent-primary)] hover:text-[var(--accent-hover)] font-medium flex items-center gap-1"
+                                >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                    Add Custom Field
+                                </button>
+                            </div>
+                        )}
 
                         <div className="pt-4 mt-2">
                             <button type="submit" className="w-full primary py-2.5 shadow-lg shadow-indigo-500/20 text-sm">
@@ -879,7 +975,7 @@ export function InstrumentDetail() {
                             <div className="flex-1 overflow-auto space-y-2">
                                 {fixtureLibrary.map(fixture => {
                                     const defaultMode = fixture.dmxModes?.[0];
-                                    const footprint = defaultMode?.footprint || defaultMode?.channelCount || '';
+                                    const footprint = defaultMode?.footprint || 1;
                                     return (
                                         <button
                                             key={fixture.id}

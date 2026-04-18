@@ -80,6 +80,7 @@ export function About() {
                                             <li><strong>EOS CSV:</strong> Import patch data exported from ETC Eos consoles.</li>
                                             <li><strong>Lightwright Text:</strong> Import standard text exports from Lightwright.</li>
                                             <li><strong>MA2 XML:</strong> Import fixture layers exported as XML from GrandMA2.</li>
+                                            <li><strong>MVR:</strong> Import from My Virtual Rig files exported by Vectorworks, Capture, or other MVR-compatible tools.</li>
                                             <li><span className="opacity-50">MA3 XML:</span> Coming soon!</li>
                                         </ul>
                                         <p className="mt-2 text-xs italic">
@@ -129,7 +130,18 @@ export function About() {
                             <p>
                                 Created by <strong>Kaelen Perchuk</strong> with the help of <strong>Google Antigravity</strong>.
                             </p>
-                            <p className="mt-3">
+                             <p className="mt-3">
+                                <strong>Source Code:</strong>{' '}
+                                <a
+                                    href="https://github.com/kaelenfae/LXLog"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[var(--accent-primary)] hover:underline"
+                                >
+                                    github.com/kaelenfae/LXLog
+                                </a>
+                            </p>
+                            <p className="mt-2">
                                 <strong>License:</strong> This project is open source under the{' '}
                                 <a
                                     href="https://www.gnu.org/licenses/gpl-3.0.html"

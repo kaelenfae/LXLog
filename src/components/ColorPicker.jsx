@@ -22,7 +22,7 @@ export function ColorPicker({ onClose, onSelect }) {
     }, [searchTerm, filter]);
 
     return (
-        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
                 <div className="flex items-center justify-between p-4 border-b border-[var(--border-subtle)]">
                     <h2 className="text-lg font-bold text-[var(--text-primary)]">Select Gel Color</h2>

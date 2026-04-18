@@ -18,7 +18,7 @@ export function NewShowModal({ onClose, onSubmit }) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200]">
             <div className="bg-[#1e1e1e] p-6 rounded shadow-lg border border-[#333] w-96 max-h-[90vh] overflow-y-auto">
                 <h2 className="text-lg font-semibold text-white mb-4">Create New Show</h2>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">

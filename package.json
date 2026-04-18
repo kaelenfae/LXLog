@@ -1,8 +1,9 @@
 {
-  "name": "developmentantigravity",
+  "name": "lxlog",
   "description": "Lighting Database and Logger",
   "author": "LXLog Team",
-  "version": "0.4.2",
+  "version": "0.4.5",
+  "license": "GPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,6 +16,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@react-pdf/renderer": "^4.3.2",
+    "@rollup/rollup-linux-x64-gnu": "^4.60.1",
     "@tanstack/react-virtual": "^3.13.14",
     "classnames": "^2.5.1",
     "dexie": "^4.2.1",

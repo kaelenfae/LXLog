@@ -2,12 +2,14 @@ import React, { useState, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { parseGdtfFile, importGdtfToLibrary, deleteFixtureFromLibrary } from '../utils/gdtfParser';
+import { FixtureDetailModal } from './FixtureDetailModal';
 
 export function FixtureLibrary() {
     const [searchQuery, setSearchQuery] = useState('');
     const [importing, setImporting] = useState(false);
     const [selectedFixture, setSelectedFixture] = useState(null);
     const [error, setError] = useState(null);
+    const [pendingDeleteId, setPendingDeleteId] = useState(null);
     const fileInputRef = useRef(null);
 
     // Load fixtures from database
@@ -49,17 +51,31 @@ export function FixtureLibrary() {
     };
 
     // Handle fixture deletion
-    const handleDelete = async (fixtureId) => {
-        if (window.confirm('Are you sure you want to delete this fixture from the library?')) {
-            await deleteFixtureFromLibrary(db, fixtureId);
-            if (selectedFixture?.id === fixtureId) {
-                setSelectedFixture(null);
-            }
+    const handleDelete = (fixtureId) => {
+        setPendingDeleteId(fixtureId);
+    };
+
+    const handleDeleteConfirmed = async () => {
+        if (pendingDeleteId == null) return;
+        await deleteFixtureFromLibrary(db, pendingDeleteId);
+        if (selectedFixture?.id === pendingDeleteId) {
+            setSelectedFixture(null);
         }
+        setPendingDeleteId(null);
     };
 
     return (
         <div className="h-full flex flex-col bg-[var(--bg-app)]">
+            {/* Inline Delete Confirmation */}
+            {pendingDeleteId != null && (
+                <div className="bg-red-900/40 border-b border-red-500/40 px-6 py-3 flex items-center justify-between shrink-0">
+                    <span className="text-sm text-red-300 font-medium">Remove this fixture from the library? This cannot be undone.</span>
+                    <div className="flex gap-2">
+                        <button onClick={() => setPendingDeleteId(null)} className="px-3 py-1 text-xs border border-[var(--border-subtle)] rounded text-[var(--text-secondary)] hover:text-white transition-colors">Cancel</button>
+                        <button onClick={handleDeleteConfirmed} className="px-3 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded font-semibold transition-colors">Remove</button>
+                    </div>
+                </div>
+            )}
             {/* Header */}
             <div className="flex-none p-4 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]">
                 <div className="flex items-center justify-between mb-4">
@@ -67,35 +83,10 @@ export function FixtureLibrary() {
                         Fixture Library
                     </h1>
                     <div className="flex items-center gap-2">
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            accept=".gdtf"
-                            onChange={handleFileSelect}
-                            className="hidden"
-                        />
-                        <button
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={importing}
-                            className="primary text-sm flex items-center gap-2"
-                        >
-                            {importing ? (
-                                <>
-                                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                    </svg>
-                                    Importing...
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                                    </svg>
-                                    Import GDTF
-                                </>
-                            )}
-                        </button>
+                        {/* GDTF Import temporarily disabled for maintenance */}
+                        <div className="text-[9px] font-bold uppercase tracking-widest text-[var(--text-tertiary)] bg-[var(--bg-app)] px-2 py-1 rounded border border-[var(--border-subtle)]">
+                            GDTF Import Coming Soon
+                        </div>
                     </div>
                 </div>
 
@@ -129,13 +120,7 @@ export function FixtureLibrary() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                         </svg>
                         <p className="text-lg mb-2">No fixtures in library</p>
-                        <p className="text-sm">Import GDTF files to build your fixture library</p>
-                        <p className="text-xs mt-4 text-[var(--text-tertiary)]">
-                            Download GDTF files from{' '}
-                            <a href="https://gdtf-share.com" target="_blank" rel="noopener noreferrer" className="text-[var(--accent-primary)] hover:underline">
-                                gdtf-share.com
-                            </a>
-                        </p>
+                        <p className="text-sm">Built-in fixture profiles will appear here.</p>
                     </div>
                 ) : (
                     <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -189,72 +174,12 @@ export function FixtureLibrary() {
                 )}
             </div>
 
-            {/* Detail Panel */}
+            {/* Detail Modal */}
             {selectedFixture && (
-                <div className="flex-none border-t border-[var(--border-subtle)] bg-[var(--bg-panel)] p-4 max-h-64 overflow-auto">
-                    <div className="flex justify-between items-start mb-3">
-                        <div>
-                            <h2 className="text-lg font-semibold text-[var(--text-primary)]">{selectedFixture.name}</h2>
-                            <p className="text-sm text-[var(--text-secondary)]">{selectedFixture.manufacturer}</p>
-                        </div>
-                        <button
-                            onClick={() => setSelectedFixture(null)}
-                            className="p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        {selectedFixture.shortName && (
-                            <div>
-                                <span className="text-[var(--text-tertiary)]">Short Name</span>
-                                <p className="text-[var(--text-primary)]">{selectedFixture.shortName}</p>
-                            </div>
-                        )}
-                        {selectedFixture.wattage > 0 && (
-                            <div>
-                                <span className="text-[var(--text-tertiary)]">Power</span>
-                                <p className="text-[var(--text-primary)] font-mono">{selectedFixture.wattage}W</p>
-                            </div>
-                        )}
-                        {selectedFixture.weight > 0 && (
-                            <div>
-                                <span className="text-[var(--text-tertiary)]">Weight</span>
-                                <p className="text-[var(--text-primary)] font-mono">{selectedFixture.weight} kg</p>
-                            </div>
-                        )}
-                        <div>
-                            <span className="text-[var(--text-tertiary)]">GDTF ID</span>
-                            <p className="text-[var(--text-primary)] font-mono text-xs truncate" title={selectedFixture.fixtureTypeId}>
-                                {selectedFixture.fixtureTypeId?.slice(0, 8)}...
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* DMX Modes */}
-                    {selectedFixture.dmxModes?.length > 0 && (
-                        <div className="mt-4">
-                            <h4 className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">DMX Modes</h4>
-                            <div className="flex flex-wrap gap-2">
-                                {selectedFixture.dmxModes.map((mode, idx) => (
-                                    <span key={idx} className="px-2 py-1 bg-[var(--bg-hover)] rounded text-xs text-[var(--text-secondary)]">
-                                        {mode.name} ({mode.footprint || mode.channelCount} ch)
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {selectedFixture.description && (
-                        <div className="mt-4">
-                            <h4 className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Description</h4>
-                            <p className="text-sm text-[var(--text-secondary)]">{selectedFixture.description}</p>
-                        </div>
-                    )}
-                </div>
+                <FixtureDetailModal 
+                    fixture={selectedFixture} 
+                    onClose={() => setSelectedFixture(null)} 
+                />
             )}
         </div>
     );

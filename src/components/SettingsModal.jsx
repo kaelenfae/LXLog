@@ -30,8 +30,28 @@ const DEFAULT_CUSTOM_COLORS = {
     '--text-secondary': '#a1a1aa',
 };
 
+const SETTINGS_TABS = [
+    { id: 'show', label: 'Show Info' },
+    { id: 'reports', label: 'Report Settings' },
+    { id: 'interface', label: 'Interface' },
+    { id: 'theme', label: 'Theme' },
+    { id: 'accessibility', label: 'Accessibility' },
+    { id: 'fields', label: 'Custom Fields' },
+    { id: 'danger', label: 'Database' }
+];
+
 export function SettingsModal({ onClose }) {
     const [activeTab, setActiveTab] = useState('show');
+    const cycleTab = (dir) => {
+        const currentIndex = SETTINGS_TABS.findIndex(t => t.id === activeTab);
+        if (dir === 'left') {
+            const nextIndex = currentIndex === 0 ? SETTINGS_TABS.length - 1 : currentIndex - 1;
+            setActiveTab(SETTINGS_TABS[nextIndex].id);
+        } else {
+            const nextIndex = currentIndex === SETTINGS_TABS.length - 1 ? 0 : currentIndex + 1;
+            setActiveTab(SETTINGS_TABS[nextIndex].id);
+        }
+    };
     const metadata = useLiveQuery(() => db.showMetadata.toArray());
     const [formData, setFormData] = useState({});
 
@@ -45,6 +65,7 @@ export function SettingsModal({ onClose }) {
     const [theme, setTheme] = useState(currentSettings.theme);
     const [showUniverse1, setShowUniverse1] = useState(currentSettings.showUniverse1);
     const [channelDisplayMode, setChannelDisplayMode] = useState(currentSettings.channelDisplayMode || 'parts');
+    const [mobileRefresh, setMobileRefresh] = useState(currentSettings.mobileRefresh);
 
     // Accessibility Settings
     const [dyslexicMode, setDyslexicMode] = useState(currentSettings.dyslexicMode);
@@ -67,6 +88,7 @@ export function SettingsModal({ onClose }) {
     const [updateStatus, setUpdateStatus] = useState(null);
     const [appVersion, setAppVersion] = useState(version);
     const [cleanupMessage, setCleanupMessage] = useState(null);
+    const [confirmPending, setConfirmPending] = useState(null); // null | 'reset' | 'duplicates' | 'magicSheet'
     const [originalTheme] = useState(currentSettings.theme); // Store original for cancel
     const [originalCustomColors] = useState(() => {
         try { return JSON.parse(localStorage.getItem('customTheme')) || DEFAULT_CUSTOM_COLORS; }
@@ -203,6 +225,9 @@ export function SettingsModal({ onClose }) {
             localStorage.setItem('customTheme', JSON.stringify(customThemeColors));
         }
 
+        // Mobile Refresh
+        localStorage.setItem('mobileRefresh', mobileRefresh);
+
         // Report Settings (if modified)
         if (formData.reportFooter !== undefined) localStorage.setItem('reportFooter', formData.reportFooter);
         if (formData.showDateInFooter !== undefined) localStorage.setItem('showDateInFooter', formData.showDateInFooter);
@@ -215,10 +240,29 @@ export function SettingsModal({ onClose }) {
     };
 
     const handleReset = async () => {
-        if (confirm('Are you sure? This will delete all instrument data.')) {
-            await resetShow();
-            onClose();
-            window.location.reload();
+        await resetShow();
+        setConfirmPending(null);
+        onClose();
+        window.location.reload();
+    };
+
+    const handleConfirmAction = async () => {
+        if (confirmPending === 'reset') {
+            await handleReset();
+        } else if (confirmPending === 'duplicates') {
+            const count = await removeDuplicates();
+            setCleanupMessage(`Removed ${count} duplicate instruments.`);
+            setTimeout(() => setCleanupMessage(null), 3000);
+            setConfirmPending(null);
+        } else if (confirmPending === 'magicSheet') {
+            localStorage.removeItem('magicSheetConfigs');
+            localStorage.removeItem('magicSheet_groupOrder');
+            localStorage.removeItem('magicSheet_groupBy');
+            localStorage.removeItem('magicSheet_canvasMode');
+            localStorage.removeItem('magicSheet_mergedGroups');
+            localStorage.removeItem('magicSheet_collapsedGroups');
+            toast.success('Magic Sheet settings cleared. Reload the page to see defaults.');
+            setConfirmPending(null);
         }
     };
 
@@ -240,21 +284,44 @@ export function SettingsModal({ onClose }) {
     if (!metadata) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-[var(--bg-panel)] w-full max-w-2xl rounded-lg shadow-2xl border border-[var(--border-subtle)] overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="flex border-b border-[var(--border-subtle)] overflow-x-auto">
-                    {['show', 'reports', 'interface', 'theme', 'accessibility', 'fields', 'danger'].map(tab => (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] sm:p-4">
+            <div className="bg-[var(--bg-panel)] w-full h-full sm:h-auto sm:max-h-[90vh] max-w-3xl sm:rounded-xl shadow-2xl sm:border border-[var(--border-subtle)] overflow-hidden flex flex-col">
+                
+                {/* Mobile Stepper Header */}
+                <div className="flex md:hidden items-center border-b border-[var(--border-subtle)] bg-[var(--bg-card)] shrink-0 h-14">
+                    <button 
+                        onClick={() => cycleTab('left')}
+                        className="px-4 h-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-center border-r border-[var(--border-subtle)] focus:outline-none"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    
+                    <div className="flex-1 flex items-center justify-center font-bold text-[var(--text-primary)] uppercase tracking-wider text-sm select-none">
+                        {SETTINGS_TABS.find(t => t.id === activeTab)?.label}
+                    </div>
+
+                    <button 
+                        onClick={() => cycleTab('right')}
+                        className="px-4 h-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-center border-l border-[var(--border-subtle)] focus:outline-none"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                </div>
+
+                {/* Desktop Horizontal Tab Bar */}
+                <div className="hidden md:flex border-b border-[var(--border-subtle)] bg-[var(--bg-card)] shrink-0 h-14 overflow-x-auto scrollbar-hide">
+                    {SETTINGS_TABS.map(tab => (
                         <button
-                            key={tab}
-                            onClick={() => setActiveTab(tab)}
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
                             className={classNames(
-                                "px-4 py-4 text-sm font-medium transition-colors uppercase tracking-wider whitespace-nowrap",
-                                activeTab === tab
-                                    ? "text-[var(--accent-primary)] border-b-2 border-[var(--accent-primary)] bg-[var(--bg-card)]"
-                                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                                "px-5 h-full flex items-center text-sm font-medium transition-colors uppercase tracking-wider whitespace-nowrap shrink-0 border-b-2",
+                                activeTab === tab.id
+                                    ? "text-[var(--accent-primary)] border-[var(--accent-primary)] bg-[var(--bg-hover)]"
+                                    : "text-[var(--text-secondary)] border-transparent hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
                             )}
                         >
-                            {tab === 'danger' ? 'DB' : tab === 'fields' ? 'Fields' : tab === 'accessibility' ? 'A11y' : tab === 'show' ? 'Show' : tab === 'theme' ? 'Theme' : tab}
+                            {tab.label}
                         </button>
                     ))}
                 </div>
@@ -263,7 +330,7 @@ export function SettingsModal({ onClose }) {
                     {activeTab === 'show' && (
                         <div className="space-y-4">
                             <h3 className="text-lg font-bold mb-4">Show Information</h3>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <label className="block">
                                     <span className="text-xs text-[var(--text-secondary)]">Show Name</span>
                                     <input
@@ -303,7 +370,7 @@ export function SettingsModal({ onClose }) {
                             </div>
 
                             {showMoreShowInfo ? (
-                                <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-[var(--border-subtle)] animate-in fade-in slide-in-from-top-2 duration-300">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-[var(--border-subtle)] animate-in fade-in slide-in-from-top-2 duration-300">
                                     <label className="block">
                                         <span className="text-xs text-[var(--text-secondary)]">Director</span>
                                         <input
@@ -414,6 +481,17 @@ export function SettingsModal({ onClose }) {
 
                             <div className="p-4 bg-[var(--bg-card)] rounded border border-[var(--border-subtle)] flex items-center justify-between">
                                 <div>
+                                    <div className="font-semibold text-[var(--accent-primary)]">Experimental: Mobile UI Refresh</div>
+                                    <div className="text-xs text-[var(--text-secondary)]">Enable bottom navigation and card-based list on small screens.</div>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" checked={mobileRefresh} onChange={e => setMobileRefresh(e.target.checked)} className="sr-only peer" />
+                                    <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent-primary)]"></div>
+                                </label>
+                            </div>
+
+                            <div className="p-4 bg-[var(--bg-card)] rounded border border-[var(--border-subtle)] flex items-center justify-between">
+                                <div>
                                     <div className="font-semibold">Disable Landing Page</div>
                                     <div className="text-xs text-[var(--text-secondary)]">Skip the intro page and go straight to the app</div>
                                 </div>
@@ -424,7 +502,7 @@ export function SettingsModal({ onClose }) {
                             </div>
 
                             <div className="p-4 bg-[var(--bg-card)] rounded border border-[var(--border-subtle)] space-y-4">
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-col sm:flex-row sm:items-center items-start justify-between gap-3 sm:gap-0">
                                     <div>
                                         <div className="font-semibold">Address Format</div>
                                         <div className="text-xs text-[var(--text-secondary)]">Universe:Address vs Absolute</div>
@@ -459,7 +537,7 @@ export function SettingsModal({ onClose }) {
 
                                 <div className="h-px bg-[var(--border-subtle)]"></div>
 
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-col sm:flex-row sm:items-center items-start justify-between gap-3 sm:gap-0">
                                     <div>
                                         <div className="font-semibold">Channel Defaults</div>
                                         <div className="text-xs text-[var(--text-secondary)]">Multi-part or Duplicate</div>
@@ -531,7 +609,7 @@ export function SettingsModal({ onClose }) {
 
                                 <div className="h-px bg-[var(--border-subtle)]"></div>
 
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-col sm:flex-row sm:items-center items-start justify-between gap-3 sm:gap-0">
                                     <div>
                                         <div className="font-semibold">Unit System</div>
                                         <div className="text-xs text-[var(--text-secondary)]">Choose feet or meters for distances</div>
@@ -566,7 +644,7 @@ export function SettingsModal({ onClose }) {
 
                                 <div className="h-px bg-[var(--border-subtle)]"></div>
 
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-col sm:flex-row sm:items-center items-start justify-between gap-3 sm:gap-0">
                                     <div>
                                         <div className="font-semibold">Universe Separator</div>
                                         <div className="text-xs text-[var(--text-secondary)]">Choose colon or slash (e.g. "2:1" vs "2/1")</div>
@@ -763,18 +841,26 @@ export function SettingsModal({ onClose }) {
                         <div className="space-y-4">
                             <h3 className="text-lg font-bold text-red-500 mb-4">Database Management</h3>
 
+                            {/* Inline confirmation bar */}
+                            {confirmPending && (
+                                <div className="p-3 bg-red-900/30 border border-red-500/40 rounded flex items-center justify-between">
+                                    <span className="text-sm text-red-300 font-medium">
+                                        {confirmPending === 'reset' && 'Reset all data? This cannot be undone.'}
+                                        {confirmPending === 'duplicates' && 'Find and remove strict duplicates?'}
+                                        {confirmPending === 'magicSheet' && 'Reset all Magic Sheet settings to defaults?'}
+                                    </span>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setConfirmPending(null)} className="px-3 py-1 text-xs border border-[var(--border-subtle)] rounded text-[var(--text-secondary)] hover:text-white transition-colors">Cancel</button>
+                                        <button onClick={handleConfirmAction} className="px-3 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded font-semibold transition-colors">Confirm</button>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="p-4 border border-[var(--border-subtle)] rounded bg-[var(--bg-card)] mb-4">
                                 <h4 className="font-bold mb-2">Cleanup</h4>
                                 <p className="text-sm text-[var(--text-secondary)] mb-1">Remove instruments that are identical duplicates (same channel, address, type, etc).</p>
                                 <p className="text-xs text-red-400 mb-4">This action cannot be undone.</p>
-                                <button onClick={async () => {
-                                    if (confirm('Find and remove strict duplicates?')) {
-                                        const count = await removeDuplicates();
-                                        setCleanupMessage(`Removed ${count} duplicate instruments.`);
-                                        // Clear message after 3 seconds
-                                        setTimeout(() => setCleanupMessage(null), 3000);
-                                    }
-                                }} className="bg-[var(--bg-hover)] border border-[var(--border-default)] px-4 py-2 rounded text-sm hover:text-white transition-colors">
+                                <button onClick={() => setConfirmPending('duplicates')} className="bg-[var(--bg-hover)] border border-[var(--border-default)] px-4 py-2 rounded text-sm hover:text-white transition-colors">
                                     Remove Duplicates
                                 </button>
                                 {cleanupMessage && (
@@ -788,17 +874,7 @@ export function SettingsModal({ onClose }) {
                                 <h4 className="font-bold mb-2">Reset Magic Sheet</h4>
                                 <p className="text-sm text-[var(--text-secondary)] mb-1">Reset all Magic Sheet layout settings (group configs, sort orders, column counts, merged groups).</p>
                                 <p className="text-xs text-yellow-400 mb-4">Settings will be restored to defaults on next load.</p>
-                                <button onClick={() => {
-                                    if (confirm('Reset all Magic Sheet settings to defaults?')) {
-                                        localStorage.removeItem('magicSheetConfigs');
-                                        localStorage.removeItem('magicSheet_groupOrder');
-                                        localStorage.removeItem('magicSheet_groupBy');
-                                        localStorage.removeItem('magicSheet_canvasMode');
-                                        localStorage.removeItem('magicSheet_mergedGroups');
-                                        localStorage.removeItem('magicSheet_collapsedGroups');
-                                        toast.success('Magic Sheet settings cleared. Reload the page to see defaults.');
-                                    }
-                                }} className="bg-[var(--bg-hover)] border border-[var(--border-default)] px-4 py-2 rounded text-sm hover:text-white transition-colors">
+                                <button onClick={() => setConfirmPending('magicSheet')} className="bg-[var(--bg-hover)] border border-[var(--border-default)] px-4 py-2 rounded text-sm hover:text-white transition-colors">
                                     Reset Magic Sheet Settings
                                 </button>
                             </div>
@@ -809,7 +885,7 @@ export function SettingsModal({ onClose }) {
                                     This will delete ALL instruments and show data.
                                 </p>
                                 <p className="text-xs text-red-400 mb-4">This action cannot be undone.</p>
-                                <button onClick={handleReset} className="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20">
+                                <button onClick={() => setConfirmPending('reset')} className="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20">
                                     Reset Show (Clear Data)
                                 </button>
                             </div>
@@ -864,11 +940,11 @@ export function SettingsModal({ onClose }) {
                     )}
 
 
-                </div>
+                    </div>
 
-                <div className="p-4 border-t border-[var(--border-subtle)] flex justify-end gap-3 bg-[var(--bg-card)]">
-                    <button onClick={handleClose} className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-white transition-colors">Cancel</button>
-                    <button onClick={handleSave} className="px-6 py-2 bg-[var(--accent-primary)] text-white rounded text-sm font-semibold hover:bg-[var(--accent-hover)] transition-colors shadow-lg shadow-indigo-500/20">
+                <div className="p-4 border-t border-[var(--border-subtle)] flex justify-end gap-3 bg-[var(--bg-panel)] shrink-0">
+                    <button onClick={handleClose} className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-[#fff] transition-colors rounded-lg font-medium hover:bg-[var(--bg-hover)]">Cancel</button>
+                    <button onClick={handleSave} className="px-6 py-2 bg-[var(--accent-primary)] text-white rounded-lg text-sm font-bold hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20 active:scale-95">
                         Save Changes
                     </button>
                 </div>

@@ -1,4 +1,5 @@
 import Dexie from 'dexie';
+import { parseGdtfFile, importGdtfToLibrary } from './utils/gdtfParser';
 
 export const db = new Dexie('LightingDB');
 
@@ -34,14 +35,18 @@ export const getInstrumentNotes = async (instrumentId) => {
 /**
  * Shared helper to save or merge instruments into the database
  * @param {Array} instruments - Array of instrument objects
- * @param {boolean} merge - Whether to merge with existing data or clear first
+ * @param {Object} options - Options: { merge: boolean, preserveLibrary: boolean }
  */
-export const saveInstruments = async (instruments, merge = false) => {
+export const saveInstruments = async (instruments, options = { merge: false, preserveLibrary: false }) => {
+    const { merge = false, preserveLibrary = false } = typeof options === 'boolean' ? { merge: options } : options;
+
     return await db.transaction('rw', db.instruments, db.eosTargets, db.fixtureLibrary, db.instrumentNotes, async () => {
         if (!merge) {
             await db.instruments.clear();
             await db.eosTargets.clear();
-            await db.fixtureLibrary.clear();
+            if (!preserveLibrary) {
+                await db.fixtureLibrary.clear();
+            }
             await db.instrumentNotes.clear();
             await db.instruments.bulkAdd(instruments);
         } else {
@@ -150,10 +155,13 @@ export const importShow = async (jsonString) => {
         }
 
         await db.transaction('rw', [db.instruments, db.showMetadata, db.eosTargets, db.fixtureLibrary, db.instrumentNotes], async () => {
+            // Clear all tables once upfront
             await db.instruments.clear();
             await db.eosTargets.clear();
             await db.fixtureLibrary.clear();
             await db.instrumentNotes.clear();
+            await db.showMetadata.clear();
+
             await db.instruments.bulkAdd(data.instruments);
 
             // Restore additional tables if present (v2+ format)
@@ -167,8 +175,8 @@ export const importShow = async (jsonString) => {
                 await db.instrumentNotes.bulkAdd(data.instrumentNotes);
             }
 
+            // Restore metadata if present (v2+ format); already cleared above
             if (data.metadata) {
-                await db.showMetadata.clear();
                 await db.showMetadata.add(data.metadata);
             }
         });
@@ -180,8 +188,23 @@ export const importShow = async (jsonString) => {
 };
 
 export const resetShow = async () => {
-    await db.transaction('rw', db.instruments, async () => {
+    await db.transaction('rw', [db.instruments, db.showMetadata, db.eosTargets, db.fixtureLibrary, db.instrumentNotes], async () => {
         await db.instruments.clear();
+        await db.eosTargets.clear();
+        await db.fixtureLibrary.clear();
+        await db.instrumentNotes.clear();
+        await db.showMetadata.clear();
+    });
+};
+
+/**
+ * Delete instruments by ID and cascade-delete their associated notes.
+ * @param {Array<number>} ids - Array of instrument IDs to delete
+ */
+export const deleteInstruments = async (ids) => {
+    await db.transaction('rw', [db.instruments, db.instrumentNotes], async () => {
+        await db.instruments.bulkDelete(ids);
+        await db.instrumentNotes.where('instrumentId').anyOf(ids).delete();
     });
 };
 
@@ -318,7 +341,7 @@ export const importEosCsv = async (csvString, merge = false) => {
             }
         });
 
-        return await saveInstruments(instruments, merge);
+        return await saveInstruments(instruments, { merge });
 
     } catch (e) {
         console.error("CSV Import Failed", e);
@@ -466,12 +489,13 @@ export const importLightwrightTxt = async (txtString, merge = false, selectedFie
                 // Enforced logic
                 channel: channelVal,
                 part: part,
+                dmxFootprint: datum.dmxFootprint || 1,
                 // Ensure customFields is present even if empty
                 customFields: datum.customFields || {}
             });
         }
 
-        return await saveInstruments(instruments, merge);
+        return await saveInstruments(instruments, { merge });
     } catch (e) {
         console.error("LW Import Failed", e);
         return false;
@@ -530,7 +554,8 @@ export const importMa2Xml = async (xmlString, merge = false) => {
                         text7: '',
                         text8: '',
                         text9: '',
-                        text10: ''
+                        text10: '',
+                        dmxFootprint: 1
                     });
                 }
             }
@@ -538,9 +563,309 @@ export const importMa2Xml = async (xmlString, merge = false) => {
 
         if (instruments.length === 0) throw new Error("No fixtures found in XML");
 
-        return await saveInstruments(instruments, merge);
+        return await saveInstruments(instruments, { merge });
     } catch (e) {
         console.error("MA2 XML Import Failed", e);
+        return false;
+    }
+};
+
+export const importMvr = async (arrayBuffer, merge = false) => {
+    try {
+        const JSZip = (await import('jszip')).default;
+        const zip = await JSZip.loadAsync(arrayBuffer);
+
+        // MVR archives must contain GeneralSceneDescription.xml
+        const xmlFile = zip.file('GeneralSceneDescription.xml');
+        if (!xmlFile) throw new Error('No GeneralSceneDescription.xml found in MVR archive');
+
+        const xmlString = await xmlFile.async('string');
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+
+        // Check for XML parse errors
+        const parseError = xmlDoc.querySelector('parsererror');
+        if (parseError) throw new Error('Failed to parse GeneralSceneDescription.xml');
+
+        // If not merging, clear the database BEFORE we start adding GDTFs
+        if (!merge) {
+            await db.transaction('rw', [db.instruments, db.eosTargets, db.fixtureLibrary, db.instrumentNotes], async () => {
+                await db.instruments.clear();
+                await db.eosTargets.clear();
+                await db.fixtureLibrary.clear();
+                await db.instrumentNotes.clear();
+            });
+        }
+
+        // ── Step 1: Extract & import bundled GDTF files ──────────────────────
+        // Build a map of gdtf filename → { fixtureTypeId, wattage } for later linking.
+        // MVR archives store GDTF files at the root level (e.g. "ETC@Source4_50deg.gdtf").
+        const gdtfMap = {}; // filename → { fixtureTypeId, wattage }
+
+        const gdtfEntries = Object.keys(zip.files).filter(name =>
+            name.toLowerCase().endsWith('.gdtf') && !zip.files[name].dir
+        );
+        console.log(`[MVR] Found ${gdtfEntries.length} bundled GDTF file(s)`);
+
+        for (const gdtfPath of gdtfEntries) {
+            try {
+                const gdtfArrayBuffer = await zip.files[gdtfPath].async('arraybuffer');
+                const fixtureData = await parseGdtfFile(gdtfArrayBuffer);
+                await importGdtfToLibrary(db, fixtureData);
+
+                // Index by base filename and full path to ensure flexible matching
+                const baseName = gdtfPath.split('/').pop();
+                const info = {
+                    fixtureTypeId: fixtureData.fixtureTypeId,
+                    wattage: fixtureData.wattage || 0
+                };
+                
+                gdtfMap[gdtfPath] = info;
+                gdtfMap[baseName] = info;
+                // Also index without the .gdtf extension to handle partial matches
+                gdtfMap[baseName.replace(/\.gdtf$/i, '')] = info;
+                console.log(`[MVR] Imported GDTF: ${baseName} (${fixtureData.name})`);
+            } catch (gdtfErr) {
+                console.warn(`[MVR] Failed to import GDTF "${gdtfPath}":`, gdtfErr);
+            }
+        }
+
+        // ── Step 2: Build position & instrument data from the scene XML ───────
+        const instruments = [];
+
+        // Map UUIDs to human-readable names.
+        // Positions can be in AUXData/Positions, UserData, or root level.
+        // We find all Position tags that have both uuid and name attributes.
+        const positionMap = {};
+        const allPositionDefs = xmlDoc.getElementsByTagName('Position');
+        for (let i = 0; i < allPositionDefs.length; i++) {
+            const pos = allPositionDefs[i];
+            const uuid = pos.getAttribute('uuid');
+            const name = pos.getAttribute('name');
+            if (uuid && name) positionMap[uuid] = name;
+        }
+
+        /**
+         * Parse an MVR Address text into "Universe.Address" string.
+         * Can be absolute integer (e.g. "829") or already "Universe.Address" (e.g. "2.317").
+         */
+        const parseAddress = (addrText) => {
+            if (!addrText) return '';
+            const trimmed = addrText.trim();
+            if (trimmed.includes('.')) return trimmed;
+            const abs = parseInt(trimmed, 10);
+            if (isNaN(abs) || abs <= 0) return trimmed;
+            const universe = Math.floor((abs - 1) / 512) + 1;
+            const address = ((abs - 1) % 512) + 1;
+            return `${universe}.${address}`;
+        };
+
+        // Robust helper to find a direct child by tag name (ignoring namespaces)
+        const getXMLChild = (parent, tagName) => {
+            if (!parent || !parent.childNodes) return null;
+            const children = parent.childNodes;
+            for (let i = 0; i < children.length; i++) {
+                const node = children[i];
+                if (node.nodeType === 1 && (node.nodeName === tagName || node.localName === tagName)) {
+                    return node;
+                }
+            }
+            return null;
+        };
+
+        // Recurse through Layers and Fixtures to maintain Layer context (Position fallback)
+        const layers = xmlDoc.getElementsByTagName('Layer');
+        console.log(`[MVR] Found ${layers.length} Layers in document`);
+        
+        const processedUuids = new Set();
+
+        const processFixtures = (parentNode, fallbackPosition) => {
+            // More robust traversal using childNodes instead of .children
+            const fixtureNodes = [];
+            const children = parentNode.childNodes;
+            for (let i = 0; i < children.length; i++) {
+                const node = children[i];
+                // Check both nodeName and localName to handle namespaces if present
+                if (node.nodeType === 1 && (node.nodeName === 'Fixture' || node.localName === 'Fixture')) {
+                    fixtureNodes.push(node);
+                }
+            }
+            
+            for (const child of fixtureNodes) {
+                try {
+                    const uuid = child.getAttribute('uuid');
+                    if (uuid && processedUuids.has(uuid)) continue;
+                    if (uuid) processedUuids.add(uuid);
+
+                    // Fixture name attribute = instrument model/type (e.g. "ETC Source 4 50°")
+                    const fixtureName = child.getAttribute('name') || '';
+
+                    // Resolve Position: 
+                    // 1. Check child <Position> element for UUID link
+                    // 2. Fall back to Layer name (for tools that use layers as positions)
+                    let positionVal = '';
+                    const positionEl = getXMLChild(child, 'Position');
+                    if (positionEl) {
+                        const posUuid = positionEl.textContent.trim();
+                        positionVal = positionMap[posUuid] || posUuid;
+                    }
+                    
+                    // If we still have a UUID (random string) or nothing, try fallback to Layer name
+                    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                    if (!positionVal || uuidPattern.test(positionVal)) {
+                        positionVal = fallbackPosition || positionVal;
+                    }
+
+                    // Resolve Address
+                    let addressVal = '';
+                    const addressesEl = getXMLChild(child, 'Addresses');
+                    if (addressesEl) {
+                        const addressEl = getXMLChild(addressesEl, 'Address');
+                        if (addressEl) addressVal = parseAddress(addressEl.textContent);
+                    }
+
+                    const unitNumberEl = getXMLChild(child, 'UnitNumber');
+                    const functionEl = getXMLChild(child, 'Function');
+                    const gdtfSpecEl = getXMLChild(child, 'GDTFSpec');
+                    const fixtureIdNumericEl = getXMLChild(child, 'FixtureIDNumeric');
+                    const fixtureIdEl = getXMLChild(child, 'FixtureID');
+                    const customIdEl = getXMLChild(child, 'CustomId');
+                    const customIdTypeEl = getXMLChild(child, 'CustomIdType');
+
+                    // Channel resolution priority (per github.com/mvrdevelopment/spec):
+                    //   FixtureIDNumeric = Integer channel for programming (preferred)
+                    //   FixtureID        = String label — parse as int if possible
+                    //   CustomId + CustomIdType=2 = Channel-type custom identifier
+                    const fixtureIdNumeric = fixtureIdNumericEl ? parseInt(fixtureIdNumericEl.textContent.trim(), 10) : NaN;
+                    const fixtureIdStr = fixtureIdEl ? fixtureIdEl.textContent.trim() : '';
+                    const fixtureIdAsNum = parseInt(fixtureIdStr, 10);
+                    const customIdType = customIdTypeEl ? customIdTypeEl.textContent.trim() : '';
+                    const customIdNum = (customIdEl && customIdType === '2') ? parseInt(customIdEl.textContent.trim(), 10) : NaN;
+
+                    let channelVal;
+                    if (!isNaN(fixtureIdNumeric)) {
+                        channelVal = fixtureIdNumeric;
+                    } else if (!isNaN(fixtureIdAsNum)) {
+                        channelVal = fixtureIdAsNum;
+                    } else if (!isNaN(customIdNum)) {
+                        channelVal = customIdNum;
+                    } else if (fixtureIdStr) {
+                        channelVal = fixtureIdStr;
+                    } else {
+                        console.log(`[MVR] Skipping fixture "${fixtureName}" — no channel identifier found`);
+                        continue;
+                    }
+
+                    // Type: fixture name attr is most human-readable (e.g. Vectorworks = "ETC Source 4 50°").
+                    // Fall back to GDTFSpec model portion for tools that omit the name attr.
+                    // GDTFSpec format: "Manufacturer@Model.gdtf" — strip prefix and extension.
+                    const gdtfSpec = gdtfSpecEl ? gdtfSpecEl.textContent.trim() : '';
+                    let typeVal = fixtureName;
+                    if (!typeVal && gdtfSpec) {
+                        const model = gdtfSpec.includes('@') ? gdtfSpec.split('@').slice(1).join('@') : gdtfSpec;
+                        typeVal = model.replace(/\.gdtf$/i, '').replace(/_/g, ' ');
+                    }
+
+                    // ── Link instrument to GDTF profile ─────────────────────────────
+                    let fixtureTypeId = '';
+                    let watt = '';
+                    let dmxFootprint = 1; // Default to 1
+                    
+                    if (gdtfSpec) {
+                        const gdtfBaseName = gdtfSpec.split('/').pop(); // strip any path prefix
+                        
+                        // Try matching in order of specificity:
+                        // 1. Exact match on spec (full path or exact filename)
+                        // 2. Base filename match
+                        // 3. Base name without extension
+                        // 4. Model-only match (strip Manufacturer@ prefix)
+                        let gdtfInfo = gdtfMap[gdtfSpec] || gdtfMap[gdtfBaseName] || gdtfMap[gdtfBaseName.replace(/\.gdtf$/i, '')];
+                        
+                        if (!gdtfInfo && gdtfBaseName.includes('@')) {
+                            const modelOnly = gdtfBaseName.split('@').slice(1).join('@');
+                            gdtfInfo = gdtfMap[modelOnly] || gdtfMap[modelOnly.replace(/\.gdtf$/i, '')];
+                        }
+
+                        if (gdtfInfo) {
+                            fixtureTypeId = gdtfInfo.fixtureTypeId;
+                            if (gdtfInfo.wattage > 0) watt = gdtfInfo.wattage;
+                            // Set footprint from first DMX mode if available
+                            if (gdtfInfo.dmxModes?.[0]?.footprint > 0) {
+                                dmxFootprint = gdtfInfo.dmxModes[0].footprint;
+                            }
+                        }
+                    }
+
+                    instruments.push({
+                        uuid,
+                        channel: channelVal,
+                        address: addressVal,
+                        type: typeVal,
+                        position: positionVal,
+                        purpose: functionEl ? functionEl.textContent.trim() : '',
+                        unit: unitNumberEl ? (unitNumberEl.textContent.trim() || '') : '',
+                        notes: '',
+                        color: '',
+                        watt,
+                        gobo: '',
+                        accessory: '',
+                        part: 1,
+                        proportion: '',
+                        curve: '',
+                        fixtureTypeId,
+                        dmxFootprint,
+                        text1: '', text2: '', text3: '', text4: '', text5: '',
+                        text6: '', text7: '', text8: '', text9: '', text10: ''
+                    });
+
+                    // Handle nested fixtures (sub-fixtures or grouped fixtures)
+                    processFixtures(child, positionVal);
+
+                } catch (instErr) {
+                    console.error(`[MVR] Error processing fixture ${child.getAttribute('name') || '(unnamed)'}:`, instErr);
+                }
+            }
+        };
+
+        // Start processing from Layer level
+        for (let i = 0; i < layers.length; i++) {
+            const layer = layers[i];
+            const layerName = layer.getAttribute('name') || '';
+            processFixtures(layer, layerName);
+        }
+
+        if (instruments.length === 0) {
+            // Fallback: If no layers/fixtures found with structured approach, try flat scan
+            const allFixtures = xmlDoc.getElementsByTagName('Fixture');
+            if (allFixtures.length > 0) {
+                console.log(`[MVR] Hierarchical scan found nothing, falling back to flat scan for ${allFixtures.length} fixtures`);
+                for (let i = 0; i < allFixtures.length; i++) {
+                    const child = allFixtures[i];
+                    const uuid = child.getAttribute('uuid');
+                    if (uuid && processedUuids.has(uuid)) continue;
+                    
+                    // Call the same processFixtures logic on each parent found individually
+                    processFixtures(child.parentNode, ''); 
+                }
+            }
+            
+            if (instruments.length === 0) throw new Error('No fixtures found in MVR file');
+        }
+
+        console.log(`[MVR] Successfully parsed ${instruments.length} instruments`);
+
+
+        // Assign part numbers for fixtures sharing the same channel
+        const channelCounts = {};
+        for (const inst of instruments) {
+            const key = `channel_${inst.channel}`;
+            channelCounts[key] = (channelCounts[key] || 0) + 1;
+            inst.part = channelCounts[key];
+        }
+
+        return await saveInstruments(instruments, { merge, preserveLibrary: true });
+    } catch (e) {
+        console.error('MVR Import Failed', e);
         return false;
     }
 };

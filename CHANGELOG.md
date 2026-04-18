@@ -2,6 +2,38 @@
 
 All notable changes to LXLog will be documented in this file.
 
+## [0.4.5] - 2026-04-12
+
+### Changed
+- Temporarily disabled experimental GDTF and MVR import options to ensure release stability.
+- Improved mobile and small-screen layout for sidebar navigation.
+
+### Fixed
+- Resolved internal dependency conflicts causing Vite reloading loops.
+
+## [0.4.4] - 2026-04-12
+
+### Added
+- Groundwork for GDTF integration: Completely rebuilt the GDTF parser to adhere to DIN SPEC 15800 standards.
+
+### Changed
+- Address-First Resolution: Optimized attribute grouping and split channel support.
+- Asset Handling: Improved extraction for fixture thumbnails and wheel/slot visualizations.
+
+### Fixed
+- Fixed critical module crash during engine refactor.
+
+## [0.4.3] - 2026-04-06
+
+### Added
+- Groundwork for MVR importing: Initial implementation of MVR container parsing and asset extraction.
+- Unified Print Center: Centralized hub for bundling multiple reports into a single, high-fidelity PDF.
+- Masonry Magic Sheets: Responsive grid engine with dynamic column spanning and 1/3, 2/3, or Full-page cards.
+
+### Changed
+- PDF Infrastructure: Migrated all reports to @react-pdf/renderer for pixel-perfect exports and professional cover pages.
+- Standardized numerical sorting and persistent layout settings across sessions.
+
 ## [0.4.2] - 2026-02-21
 
 ### Fixed

@@ -11,6 +11,8 @@ import { ContextMenu } from './ContextMenu';
 import { BulkEditPanel } from './BulkEditPanel';
 import { ColorSwatch } from './ColorSwatch';
 import { useToast } from './Toast';
+import { InstrumentCardList } from './InstrumentCardList';
+import { FloatingActionButton } from './FloatingActionButton';
 import classNames from 'classnames';
 
 // Helper Component
@@ -74,6 +76,8 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     const [isColumnConfigOpen, setIsColumnConfigOpen] = useState(false); // Gear Menu State
     const [sortField, setSortField] = useState(() => localStorage.getItem('instrumentSchedule_sortField') || 'position');
     const [sortDirection, setSortDirection] = useState(() => localStorage.getItem('instrumentSchedule_sortDirection') || 'asc');
+    const [pendingDelete, setPendingDelete] = useState(null); // null | { ids: number[] }
+    const [pendingRenumber, setPendingRenumber] = useState(null); // null | { position, ids }
 
     // Column Configuration State - Persisted
     const [visibleColumns, setVisibleColumns] = useState(() => {
@@ -103,7 +107,17 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     const [contextMenu, setContextMenu] = useState(null); // { x, y, instrument }
 
     // Interface Settings
-    const { isCompact, addressMode, showUniverse1, channelDisplayMode, universeSeparator } = useSettings();
+    const { isCompact, addressMode, showUniverse1, channelDisplayMode, universeSeparator, mobileRefresh } = useSettings();
+
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    const isMobileRefresh = isMobile && mobileRefresh;
 
     // Persist Visible Columns and Widths
     useEffect(() => {
@@ -584,16 +598,23 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     const handleDeleteSelected = async () => {
         const idsToDelete = selectedIds.size > 0 ? [...selectedIds] : (contextMenu?.instrument ? [contextMenu.instrument.id] : []);
         if (idsToDelete.length === 0) return;
+        setPendingDelete({ ids: idsToDelete });
+        setContextMenu(null);
+    };
 
-        if (confirm(`Delete ${idsToDelete.length} instrument${idsToDelete.length > 1 ? 's' : ''}?`)) {
-            try {
-                await db.instruments.bulkDelete(idsToDelete);
-                setSelectedIds(new Set());
-                setContextMenu(null);
-            } catch (err) {
-                console.error("Delete failed", err);
-                toast.error("Failed to delete instruments");
-            }
+    const handleDeleteConfirmed = async () => {
+        const ids = pendingDelete?.ids || [];
+        setPendingDelete(null);
+        if (ids.length === 0) return;
+        try {
+            await db.transaction('rw', [db.instruments, db.instrumentNotes], async () => {
+                await db.instruments.bulkDelete(ids);
+                await db.instrumentNotes.where('instrumentId').anyOf(ids).delete();
+            });
+            setSelectedIds(new Set());
+        } catch (err) {
+            console.error('Delete failed', err);
+            toast.error('Failed to delete instruments');
         }
     };
 
@@ -619,18 +640,21 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
 
     const handleRenumberPosition = async (position) => {
         if (!position) return;
-        // Get all visible instruments in this position, preserving current sort order
         const positionInstruments = filteredInstruments.filter(i => i.position === position);
         if (positionInstruments.length === 0) return;
+        // Store for inline confirm
+        setPendingRenumber({ position, ids: positionInstruments.map(i => i.id) });
+    };
 
-        if (confirm(`Renumber ${positionInstruments.length} units in "${position}"? This will assign unit numbers 1-${positionInstruments.length} based on current sort order.`)) {
-            try {
-                const ids = positionInstruments.map(i => i.id);
-                await renumberPosition(position, ids);
-            } catch (err) {
-                console.error("Renumber failed", err);
-                toast.error("Failed to renumber position");
-            }
+    const handleRenumberConfirmed = async () => {
+        if (!pendingRenumber) return;
+        const { position, ids } = pendingRenumber;
+        setPendingRenumber(null);
+        try {
+            await renumberPosition(position, ids);
+        } catch (err) {
+            console.error('Renumber failed', err);
+            toast.error('Failed to renumber position');
         }
     };
 
@@ -659,61 +683,89 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
         "40px", // Checkbox
         ...visibleCols.map(c => `${columnWidths[c.id]}px`)
     ].join(' ');
-
-    const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id] || 0), 0);
+const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id] || 0), 0);
 
     return (
-        <div className="flex flex-col h-full relative bg-[var(--bg-app)]">
-            {/* Toolbar - (Lines 415-499 maintained) */}
+        <div className="flex flex-col h-full relative bg-[var(--bg-app)] min-h-0">
+            {/* Inline Delete Confirmation */}
+            {pendingDelete && (
+                <div className="bg-red-900/40 border-b border-red-500/40 px-6 py-3 flex items-center justify-between shrink-0 z-10">
+                    <span className="text-sm text-red-300 font-medium">
+                        Delete {pendingDelete.ids.length} instrument{pendingDelete.ids.length > 1 ? 's' : ''}? This cannot be undone.
+                    </span>
+                    <div className="flex gap-2">
+                        <button onClick={() => setPendingDelete(null)} className="px-3 py-1 text-xs border border-[var(--border-subtle)] rounded text-[var(--text-secondary)] hover:text-white transition-colors">Cancel</button>
+                        <button onClick={handleDeleteConfirmed} className="px-3 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded font-semibold transition-colors">Delete</button>
+                    </div>
+                </div>
+            )}
+            {/* Inline Renumber Confirmation */}
+            {pendingRenumber && (
+                <div className="bg-amber-900/30 border-b border-amber-500/40 px-6 py-3 flex items-center justify-between shrink-0 z-10">
+                    <span className="text-sm text-amber-300 font-medium">
+                        Renumber {pendingRenumber.ids.length} units in &ldquo;{pendingRenumber.position}&rdquo; 1–{pendingRenumber.ids.length} based on current sort?
+                    </span>
+                    <div className="flex gap-2">
+                        <button onClick={() => setPendingRenumber(null)} className="px-3 py-1 text-xs border border-[var(--border-subtle)] rounded text-[var(--text-secondary)] hover:text-white transition-colors">Cancel</button>
+                        <button onClick={handleRenumberConfirmed} className="px-3 py-1 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded font-semibold transition-colors">Renumber</button>
+                    </div>
+                </div>
+            )}
+            {/* FAB - Only on Mobile Refresh - Move to top for best z-index coverage */}
+            {isMobileRefresh && <FloatingActionButton />}
+            
+            {/* Toolbar */}
             <div className="h-14 border-b border-[var(--border-subtle)] flex items-center px-6 bg-[var(--bg-app)] justify-between shrink-0">
                 <div className="flex items-center gap-4">
                     <h1 className="text-xl font-bold tracking-tight text-[var(--text-primary)]">Instrument Schedule</h1>
                 </div>
                 <div className="flex gap-3 items-center">
-                    {/* Gear Menu for Columns */}
-                    <div className="relative">
-                        <button
-                            className={classNames("p-2 rounded-md transition-all border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]", {
-                                "bg-[var(--bg-hover)] text-[var(--text-primary)]": isColumnConfigOpen
-                            })}
-                            onClick={() => setIsColumnConfigOpen(!isColumnConfigOpen)}
-                            title="Configure Columns"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 4v16m6-16v16" />
-                                <rect x="4" y="4" width="16" height="16" rx="2" strokeWidth={2} />
-                            </svg>
-                        </button>
-                        {isColumnConfigOpen && (
-                            <div className="absolute top-10 right-0 w-56 bg-[var(--bg-card)] border border-[var(--border-default)] rounded-md shadow-2xl z-50 p-3">
-                                <h3 className="text-xs font-bold uppercase text-[var(--text-secondary)] mb-2 px-1">Visible Columns</h3>
-                                <div className="space-y-1">
-                                    {dynamicColumns.map(col => (
-                                        <label key={col.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[var(--bg-hover)] cursor-pointer text-sm">
-                                            <input
-                                                type="checkbox"
-                                                checked={visibleColumns.has(col.id)}
-                                                onChange={() => toggleColumnVisibility(col.id)}
-                                                className="rounded border-[var(--border-default)] bg-[var(--bg-app)] text-[var(--accent-primary)] focus:ring-[var(--accent-primary)] focus:ring-offset-0"
-                                            />
-                                            <span className="text-[var(--text-primary)]">{col.label}</span>
-                                        </label>
-                                    ))}
+                    {/* Gear Menu for Columns - Hide on mobile refresh */}
+                    {!isMobileRefresh && (
+                        <div className="relative">
+                            <button
+                                className={classNames("p-2 rounded-md transition-all border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]", {
+                                    "bg-[var(--bg-hover)] text-[var(--text-primary)]": isColumnConfigOpen
+                                })}
+                                onClick={() => setIsColumnConfigOpen(!isColumnConfigOpen)}
+                                title="Configure Columns"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 4v16m6-16v16" />
+                                    <rect x="4" y="4" width="16" height="16" rx="2" strokeWidth={2} />
+                                </svg>
+                            </button>
+                            {isColumnConfigOpen && (
+                                <div className="absolute top-10 right-0 w-56 bg-[var(--bg-card)] border border-[var(--border-default)] rounded-md shadow-2xl z-50 p-3">
+                                    <h3 className="text-xs font-bold uppercase text-[var(--text-secondary)] mb-2 px-1">Visible Columns</h3>
+                                    <div className="space-y-1">
+                                        {dynamicColumns.map(col => (
+                                            <label key={col.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[var(--bg-hover)] cursor-pointer text-sm">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={visibleColumns.has(col.id)}
+                                                    onChange={() => toggleColumnVisibility(col.id)}
+                                                    className="rounded border-[var(--border-default)] bg-[var(--bg-app)] text-[var(--accent-primary)] focus:ring-[var(--accent-primary)] focus:ring-offset-0"
+                                                />
+                                                <span className="text-[var(--text-primary)]">{col.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <div className="mt-3 pt-2 border-t border-[var(--border-subtle)]">
+                                        <button
+                                            className="w-full text-xs text-[var(--accent-primary)] hover:text-[var(--accent-hover)] font-medium"
+                                            onClick={() => setVisibleColumns(new Set(dynamicColumns.map(c => c.id)))}
+                                        >
+                                            Reset to Default
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="mt-3 pt-2 border-t border-[var(--border-subtle)]">
-                                    <button
-                                        className="w-full text-xs text-[var(--accent-primary)] hover:text-[var(--accent-hover)] font-medium"
-                                        onClick={() => setVisibleColumns(new Set(dynamicColumns.map(c => c.id)))}
-                                    >
-                                        Reset to Default
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                    <div className="h-6 w-px bg-[var(--border-subtle)] mx-1"></div>
+                            )}
+                        </div>
+                    )}
+                    <div className={classNames("h-6 w-px bg-[var(--border-subtle)] mx-1", { "hidden": isMobileRefresh })}></div>
 
-                    <button className="primary text-xs shadow-lg shadow-indigo-500/20" onClick={() => navigate('/app/instrument/new')}>Add Instrument</button>
+                    <button className={classNames("primary text-xs shadow-lg shadow-indigo-500/20", { "hidden": isMobileRefresh })} onClick={() => navigate('/app/instrument/new')}>Add Instrument</button>
 
                     {/* Detail Open Button - Only when Collapsed */}
                     {onToggleDetail && isCollapsed && (
@@ -727,15 +779,49 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                     )}
                 </div>
             </div>
-            {/* Virtual List */}
+            
+            {/* Conditional Sub-header for Mobile Search/Filter */}
+            {isMobileRefresh && (
+                <div className="px-4 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-app)] flex items-center gap-2">
+                    <div className="relative flex-1">
+                        <input
+                            type="text"
+                            placeholder="Search instruments..."
+                            value={filters.searchQuery}
+                            onChange={(e) => setFilters(prev => ({ ...prev, searchQuery: e.target.value }))}
+                            className="w-full pl-9 pr-4 py-2 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-xl text-sm focus:border-[var(--accent-primary)] outline-none"
+                        />
+                        <svg className="w-4 h-4 absolute left-3 top-2.5 text-[var(--text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                </div>
+            )}
+
+            {/* Content Area */}
             <div ref={parentRef} className="flex-1 overflow-auto relative select-none w-full">
-                <table
-                    style={{
-                        width: `${totalWidth}px`,
-                        tableLayout: 'fixed',
-                        borderCollapse: 'collapse'
-                    }}
-                >
+                {isMobileRefresh ? (
+                    <InstrumentCardList
+                        parentRef={parentRef}
+                        instruments={filteredInstruments}
+                        selectedIds={selectedIds}
+                        onToggleSelection={toggleSelection}
+                        onRowClick={handleRowClick}
+                        onContextMenu={handleContextMenu}
+                        addressMode={addressMode}
+                        showUniverse1={showUniverse1}
+                        universeSeparator={universeSeparator}
+                        addressCounts={addressCounts}
+                        channelCounts={channelCounts}
+                    />
+                ) : (
+                    <table
+                        style={{
+                            width: `${totalWidth}px`,
+                            tableLayout: 'fixed',
+                            borderCollapse: 'collapse'
+                        }}
+                    >
                     <thead className="sticky top-0 z-20 bg-[var(--bg-panel)] h-10 shadow-sm">
                         <tr className="h-10 text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider text-left border-b border-[var(--border-subtle)]">
                             {/* Checkbox Header */}
@@ -962,8 +1048,9 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                         )}
 
                     </tbody>
-                </table>
-                {filteredInstruments.length === 0 && (
+                    </table>
+                )}
+                {!isMobileRefresh && filteredInstruments.length === 0 && (
                     <div className="p-8 text-center text-[#666] absolute left-0 right-0 top-10">
                         No instruments found matching current filters.
                     </div>

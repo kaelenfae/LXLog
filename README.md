@@ -14,7 +14,7 @@ Lighting Database and Logger application built with React, Vite, and Electron.
   - Cutting List
   - EOS Targets (Groups, Presets, Subs)
 - **Import/Export**: 
-  - Import from EOS CSV, Lightwright Text, and MA2/MA3 XML.
+  - Import from EOS CSV, Lightwright Text, MA2/MA3 XML, and MVR (My Virtual Rig).
   - Export to PDF and CSV.
 
 ## Development
@@ -46,7 +46,7 @@ npm run electron:build
 
 ## License
 
-Proprietary - LXLog Team
+GNU General Public License v3 - LXLog Team
 
 ## Acknowledgements
 

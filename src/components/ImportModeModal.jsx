@@ -4,7 +4,7 @@ export function ImportModeModal({ onClose, onConfirm, fileName }) {
     const [mode, setMode] = useState('replace'); // 'replace' | 'merge'
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
             <div className="bg-[var(--bg-panel)] w-full max-w-md rounded-lg shadow-2xl border border-[var(--border-subtle)] overflow-hidden flex flex-col">
                 <div className="p-6">
                     <h3 className="text-lg font-bold mb-2">Import Options</h3>

@@ -3,6 +3,39 @@ import { useNavigate } from 'react-router-dom';
 
 const PATCH_NOTES = [
     {
+        version: "0.4.5",
+        date: "2026-04-12",
+        title: "Stability & Community",
+        changes: [
+            "GDTF and MVR import disabled until bugs can be sorted out for the imports.",
+            "New Mobile Interface - EXPERIMENTAL - let me know what you think.  There is an option in the settings to turn it off. ",
+            "Resolved internal dependency conflicts causing Vite reloading loops.",
+        ]
+    },
+    {
+        version: "0.4.4",
+        date: "2026-04-12",
+        title: "GDTF Specification Rebuild",
+        changes: [
+            "Groundwork for GDTF integration – Completely rebuilt the GDTF parser to adhere to DIN SPEC 15800 standards.",
+            "Address-First Resolution – Optimized attribute grouping and split channel support.",
+            "Asset Handling – Improved extraction for fixture thumbnails and wheel/slot visualizations.",
+            "Fixed critical module crash during engine refactor.",
+        ]
+    },
+    {
+        version: "0.4.3",
+        date: "2026-04-06",
+        title: "Reporting & MVR Integration",
+        changes: [
+            "Groundwork for MVR importing – Initial implementation of MVR container parsing and asset extraction.",
+            "Unified Print Center – Centralized hub for bundling multiple reports into a single, high-fidelity PDF.",
+            "Masonry Magic Sheets – Responsive grid engine with dynamic column spanning and 1/3, 2/3, or Full-page cards.",
+            "PDF Infrastructure – Migrated all reports to @react-pdf/renderer for pixel-perfect exports and professional cover pages.",
+            "Standardized numerical sorting and persistent layout settings across sessions.",
+        ]
+    },
+    {
         version: "0.4.2",
         date: "2026-02-21",
         title: "Magic Sheet Bug Fixes",

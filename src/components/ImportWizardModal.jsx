@@ -27,7 +27,8 @@ const LW_FIELD_MAP = {
 const IMPORT_FORMATS = [
     { id: 'txt', name: 'Lightwright Text (.txt)', ext: '.txt' },
     { id: 'csv', name: 'EOS CSV (.csv)', ext: '.csv' },
-    { id: 'ma2', name: 'MA2 XML (.xml)', ext: '.xml' }
+    { id: 'ma2', name: 'MA2 XML (.xml)', ext: '.xml' },
+    // { id: 'mvr', name: 'MVR (.mvr)', ext: '.mvr' }
 ];
 
 export function ImportWizardModal({ onClose, onConfirm }) {
@@ -96,54 +97,11 @@ export function ImportWizardModal({ onClose, onConfirm }) {
                 setSelectedFields(defaultSelected);
                 setStep(2);
             } else if (format === 'csv') {
-                // Parse EOS CSV - look for START_CHANNELS section for instrument field selection
-                const lines = fileContent.split(/\r?\n/);
-                const startIndex = lines.findIndex(line => line.includes('START_CHANNELS'));
-                const endIndex = lines.findIndex(line => line.includes('END_CHANNELS'));
-
-                if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
-                    // Found CHANNELS section - parse headers for field selection
-                    const headerLine = lines[startIndex + 1];
-                    const headers = headerLine.split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-                    const headerIndices = headers.map((h, i) => ({ header: h, index: i })).filter(x => x.header);
-
-                    // Check which columns have data by scanning a sample of rows
-                    const columnDataPresent = {};
-                    headerIndices.forEach(({ header }) => { columnDataPresent[header] = false; });
-
-                    const sampleEnd = Math.min(startIndex + 102, endIndex); // Sample first 100 data rows
-                    for (let i = startIndex + 2; i < sampleEnd; i++) {
-                        const line = lines[i];
-                        if (!line.trim()) continue;
-                        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-
-                        headerIndices.forEach(({ header, index }) => {
-                            const val = values[index]?.trim();
-                            if (val) columnDataPresent[header] = true;
-                        });
-                    }
-
-                    const fields = headerIndices.map(({ header }) => ({
-                        originalName: header,
-                        mappedKey: header,
-                        mappedLabel: header,
-                        isCustom: false,
-                        isRequired: header === 'CHANNEL',
-                        hasData: columnDataPresent[header]
-                    }));
-
-                    setDetectedFields(fields);
-                    const defaultSelected = {};
-                    fields.forEach(f => { defaultSelected[f.originalName] = f.hasData || f.isRequired; });
-                    setSelectedFields(defaultSelected);
-                    setStep(2);
-                } else {
-                    // No CHANNELS section found - this is a TARGETS-only import (Groups/Presets/Subs)
-                    // Skip to mode selection
-                    setStep(3);
-                }
+                // EOS CSV: importEosCsv does not use selectedFields, so skip field selection
+                // and go straight to import mode selection.
+                setStep(3);
             } else {
-                // For XML formats, skip field selection and go to mode
+                // For XML and MVR formats, skip field selection and go to mode
                 setStep(3);
             }
         } catch (err) {
@@ -169,7 +127,12 @@ export function ImportWizardModal({ onClose, onConfirm }) {
         reader.onerror = () => {
             setError("Failed to read file");
         };
-        reader.readAsText(selectedFile);
+        // MVR files are binary ZIP archives — read as ArrayBuffer
+        if (format === 'mvr') {
+            reader.readAsArrayBuffer(selectedFile);
+        } else {
+            reader.readAsText(selectedFile);
+        }
     };
 
     const toggleField = (fieldName) => {
@@ -221,7 +184,7 @@ export function ImportWizardModal({ onClose, onConfirm }) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
             <div className="bg-[var(--bg-panel)] w-full max-w-xl rounded-lg shadow-2xl border border-[var(--border-subtle)] overflow-hidden flex flex-col max-h-[80vh]">
                 {/* Header */}
                 <div className="p-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
@@ -366,7 +329,7 @@ export function ImportWizardModal({ onClose, onConfirm }) {
                             <div className="space-y-3">
                                 <label className={`flex items-start gap-3 p-3 rounded border cursor-pointer transition-colors ${importMode === 'replace'
                                     ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]'
-                                    : 'bg-[var(--bg-card)] border-[var(--border-default)] hover:border(--text-secondary)]'
+                                    : 'bg-[var(--bg-card)] border-[var(--border-default)] hover:border-[var(--text-secondary)]'
                                     }`}>
                                     <input
                                         type="radio"
