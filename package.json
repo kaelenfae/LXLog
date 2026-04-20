@@ -2,7 +2,7 @@
   "name": "lxlog",
   "description": "Lighting Database and Logger",
   "author": "LXLog Team",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "license": "GPL-3.0-only",
   "type": "module",
   "scripts": {

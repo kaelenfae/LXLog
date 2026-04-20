@@ -66,6 +66,7 @@ export function SettingsModal({ onClose }) {
     const [showUniverse1, setShowUniverse1] = useState(currentSettings.showUniverse1);
     const [channelDisplayMode, setChannelDisplayMode] = useState(currentSettings.channelDisplayMode || 'parts');
     const [mobileRefresh, setMobileRefresh] = useState(currentSettings.mobileRefresh);
+    const [showAllFixtureTypes, setShowAllFixtureTypes] = useState(currentSettings.showAllFixtureTypes);
 
     // Accessibility Settings
     const [dyslexicMode, setDyslexicMode] = useState(currentSettings.dyslexicMode);
@@ -227,6 +228,9 @@ export function SettingsModal({ onClose }) {
 
         // Mobile Refresh
         localStorage.setItem('mobileRefresh', mobileRefresh);
+
+        // Show All Fixture Types
+        localStorage.setItem('showAllFixtureTypes', showAllFixtureTypes);
 
         // Report Settings (if modified)
         if (formData.reportFooter !== undefined) localStorage.setItem('reportFooter', formData.reportFooter);
@@ -676,7 +680,18 @@ export function SettingsModal({ onClose }) {
                                         </button>
                                     </div>
                                 </div>
+                                <div className="h-px bg-[var(--border-subtle)]"></div>
 
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="font-semibold">Show All Fixture Types</div>
+                                        <div className="text-xs text-[var(--text-secondary)]">Always show full library in the Type dropdown</div>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" checked={showAllFixtureTypes} onChange={e => setShowAllFixtureTypes(e.target.checked)} className="sr-only peer" />
+                                        <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent-primary)]"></div>
+                                    </label>
+                                </div>
                             </div>
                         </div>
                     )}

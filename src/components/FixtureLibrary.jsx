@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { parseGdtfFile, importGdtfToLibrary, deleteFixtureFromLibrary } from '../utils/gdtfParser';
@@ -50,9 +50,17 @@ export function FixtureLibrary() {
         }
     };
 
+    const deleteConfirmTimer = useRef(null);
+
     // Handle fixture deletion
     const handleDelete = (fixtureId) => {
-        setPendingDeleteId(fixtureId);
+        if (pendingDeleteId === fixtureId) {
+            handleDeleteConfirmed();
+        } else {
+            setPendingDeleteId(fixtureId);
+            if (deleteConfirmTimer.current) clearTimeout(deleteConfirmTimer.current);
+            deleteConfirmTimer.current = setTimeout(() => setPendingDeleteId(null), 4000);
+        }
     };
 
     const handleDeleteConfirmed = async () => {
@@ -62,20 +70,30 @@ export function FixtureLibrary() {
             setSelectedFixture(null);
         }
         setPendingDeleteId(null);
+        if (deleteConfirmTimer.current) clearTimeout(deleteConfirmTimer.current);
     };
+
+    // Cancel deletion if clicking elsewhere
+    useEffect(() => {
+        if (pendingDeleteId == null) return;
+
+        const handleGlobalClick = () => {
+            setPendingDeleteId(null);
+        };
+
+        // Add small delay to prevent immediate trigger
+        const timer = setTimeout(() => {
+            window.addEventListener('click', handleGlobalClick);
+        }, 50);
+
+        return () => {
+            window.removeEventListener('click', handleGlobalClick);
+            clearTimeout(timer);
+        };
+    }, [pendingDeleteId]);
 
     return (
         <div className="h-full flex flex-col bg-[var(--bg-app)]">
-            {/* Inline Delete Confirmation */}
-            {pendingDeleteId != null && (
-                <div className="bg-red-900/40 border-b border-red-500/40 px-6 py-3 flex items-center justify-between shrink-0">
-                    <span className="text-sm text-red-300 font-medium">Remove this fixture from the library? This cannot be undone.</span>
-                    <div className="flex gap-2">
-                        <button onClick={() => setPendingDeleteId(null)} className="px-3 py-1 text-xs border border-[var(--border-subtle)] rounded text-[var(--text-secondary)] hover:text-white transition-colors">Cancel</button>
-                        <button onClick={handleDeleteConfirmed} className="px-3 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded font-semibold transition-colors">Remove</button>
-                    </div>
-                </div>
-            )}
             {/* Header */}
             <div className="flex-none p-4 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]">
                 <div className="flex items-center justify-between mb-4">
@@ -83,10 +101,36 @@ export function FixtureLibrary() {
                         Fixture Library
                     </h1>
                     <div className="flex items-center gap-2">
-                        {/* GDTF Import temporarily disabled for maintenance */}
-                        <div className="text-[9px] font-bold uppercase tracking-widest text-[var(--text-tertiary)] bg-[var(--bg-app)] px-2 py-1 rounded border border-[var(--border-subtle)]">
-                            GDTF Import Coming Soon
-                        </div>
+                        <button
+                            onClick={() => {
+                                if (window.confirm('Are you sure you want to clear the entire fixture library? This will remove all GDTF profiles you have imported.')) {
+                                    db.fixtureLibrary.clear();
+                                }
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 border border-red-500/50 text-red-400 text-xs font-bold uppercase tracking-wider rounded-md hover:bg-red-500/10 transition-all shadow-lg active:scale-95"
+                        >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            Clear All
+                        </button>
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={importing}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-[var(--accent-primary)] text-white text-xs font-bold uppercase tracking-wider rounded-md hover:bg-[var(--accent-hover)] transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {importing ? (
+                                <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            ) : (
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                            )}
+                            Import GDTF
+                        </button>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            className="hidden"
+                            accept=".gdtf"
+                            onChange={handleFileSelect}
+                        />
                     </div>
                 </div>
 
@@ -147,12 +191,17 @@ export function FixtureLibrary() {
                                             e.stopPropagation();
                                             handleDelete(fixture.id);
                                         }}
-                                        className="p-1 text-[var(--text-tertiary)] hover:text-red-400 transition-colors"
-                                        title="Delete fixture"
+                                        className={`p-1.5 rounded-md transition-all ${pendingDeleteId === fixture.id ? 'animate-pulse' : 'text-[var(--text-tertiary)] hover:text-[var(--error)] hover:bg-[var(--error)]/10'}`}
+                                        style={pendingDeleteId === fixture.id ? { backgroundColor: 'var(--error)', color: 'var(--accent-text)', borderColor: 'var(--error)' } : {}}
+                                        title={pendingDeleteId === fixture.id ? "Click again to confirm delete" : "Delete fixture"}
                                     >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
+                                        {pendingDeleteId === fixture.id ? (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        ) : (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                        )}
                                     </button>
                                 </div>
                                 <div className="flex items-center gap-4 text-xs text-[var(--text-tertiary)]">

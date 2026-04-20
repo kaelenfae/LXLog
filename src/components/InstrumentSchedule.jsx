@@ -72,6 +72,8 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [lastSelectedId, setLastSelectedId] = useState(null);
     const [isBatchEditOpen, setIsBatchEditOpen] = useState(false);
+    const [isDeleteConfirmed, setIsDeleteConfirmed] = useState(false);
+    const [deleteTimer, setDeleteTimer] = useState(null);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [isColumnConfigOpen, setIsColumnConfigOpen] = useState(false); // Gear Menu State
     const [sortField, setSortField] = useState(() => localStorage.getItem('instrumentSchedule_sortField') || 'position');
@@ -91,7 +93,6 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
         return saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
     });
 
-    // Filtering State
     const [filters, setFilters] = useState({
         type: 'All',
         position: 'All',
@@ -100,8 +101,14 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
         missingAddress: false,
         missingChannel: false,
         duplicates: false,
+        incompleteOnly: false,
         searchQuery: ''
     });
+
+    const [editingCell, setEditingCell] = useState(null); // { id, field, value }
+    const clickTimeoutRef = useRef(null);
+    const [isDraggingSelection, setIsDraggingSelection] = useState(false);
+    const [dragStartIndex, setDragStartIndex] = useState(null);
 
     // Context Menu State
     const [contextMenu, setContextMenu] = useState(null); // { x, y, instrument }
@@ -232,6 +239,13 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                 const isAddrDup = i.address && i.address !== '0:0' && i.address !== '0' && addressCounts[i.address] > 1;
                 const isChanDup = i.channel && channelCounts[String(i.channel)] > 1;
                 return isAddrDup || isChanDup;
+            });
+        }
+
+        if (filters.incompleteOnly) {
+            result = result.filter(i => {
+                const isAddressEmpty = !i.address || i.address === '0:0' || i.address === '0';
+                return !i.channel || isAddressEmpty || !i.type || !i.position || !i.purpose;
             });
         }
 
@@ -432,14 +446,23 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
         }
     };
 
-    const handleSelectAll = (e) => {
-        if (e.target.checked) {
+    const handleSelectAll = () => {
+        if (selectedIds.size > 0) {
+            setSelectedIds(new Set());
+        } else {
             const allIds = new Set(filteredInstruments.map(i => i.id));
             setSelectedIds(allIds);
-        } else {
-            setSelectedIds(new Set());
         }
     };
+
+    useEffect(() => {
+        const handleMouseUp = () => {
+            setIsDraggingSelection(false);
+            setDragStartIndex(null);
+        };
+        window.addEventListener('mouseup', handleMouseUp);
+        return () => window.removeEventListener('mouseup', handleMouseUp);
+    }, []);
 
     const toggleSelection = (id, e) => {
         e?.stopPropagation();
@@ -515,7 +538,14 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     };
 
     const handleCellClick = (e, inst, field) => {
-        // 1. Modifiers -> Selection
+        // Clear any existing timeout to prevent single-click navigation on double-click
+        if (clickTimeoutRef.current) {
+            clearTimeout(clickTimeoutRef.current);
+            clickTimeoutRef.current = null;
+            return;
+        }
+
+        // 1. Modifiers -> Selection (Immediate)
         if (e.ctrlKey || e.metaKey || e.shiftKey) {
             toggleSelection(inst.id, e);
             e.stopPropagation();
@@ -524,20 +554,25 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
 
         e.stopPropagation();
 
-        // 2. Bulk Edit Mode
-        if (selectedIds.size > 1 && selectedIds.has(inst.id)) {
-            navigate('/app/instrument/bulk', {
-                state: {
-                    ids: [...selectedIds],
-                    focusField: field
-                }
-            });
-            return;
-        }
+        // Delay navigation to allow double-click to cancel it
+        clickTimeoutRef.current = setTimeout(() => {
+            clickTimeoutRef.current = null;
 
-        // 3. Single Edit Mode
-        setSelectedIds(new Set()); // Clear selection on single edit
-        navigate(`/app/instrument/${inst.id}`, { state: { focusField: field } });
+            // 2. Bulk Edit Mode
+            if (selectedIds.size > 1 && selectedIds.has(inst.id)) {
+                navigate('/app/instrument/bulk', {
+                    state: {
+                        ids: [...selectedIds],
+                        focusField: field
+                    }
+                });
+                return;
+            }
+
+            // 3. Single Edit Mode
+            setSelectedIds(new Set()); // Clear selection on single edit
+            navigate(`/app/instrument/${inst.id}`, { state: { focusField: field } });
+        }, 200); // 200ms is usually enough to detect a double click
     };
 
     const handleBulkSave = async (updates, noteText) => {
@@ -598,13 +633,25 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     const handleDeleteSelected = async () => {
         const idsToDelete = selectedIds.size > 0 ? [...selectedIds] : (contextMenu?.instrument ? [contextMenu.instrument.id] : []);
         if (idsToDelete.length === 0) return;
-        setPendingDelete({ ids: idsToDelete });
+        
+        // If coming from context menu or shortcut, we still need a safe way to confirm.
+        // But for the footer button, we use the local confirmed state.
+        if (isDeleteConfirmed) {
+            handleDeleteConfirmed();
+        } else {
+            setIsDeleteConfirmed(true);
+            if (deleteTimer) clearTimeout(deleteTimer);
+            const timer = setTimeout(() => setIsDeleteConfirmed(false), 4000);
+            setDeleteTimer(timer);
+        }
         setContextMenu(null);
     };
 
     const handleDeleteConfirmed = async () => {
-        const ids = pendingDelete?.ids || [];
+        const ids = selectedIds.size > 0 ? [...selectedIds] : (pendingDelete?.ids || []);
+        if (deleteTimer) clearTimeout(deleteTimer);
         setPendingDelete(null);
+        setIsDeleteConfirmed(false);
         if (ids.length === 0) return;
         try {
             await db.transaction('rw', [db.instruments, db.instrumentNotes], async () => {
@@ -658,6 +705,36 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
         }
     };
 
+    const handleInlineSave = async (id, isCustom, field, value) => {
+        try {
+            if (isCustom) {
+                const inst = await db.instruments.get(id);
+                const updates = { 
+                    customFields: { 
+                        ...(inst.customFields || {}), 
+                        [field]: value 
+                    } 
+                };
+                await db.instruments.update(id, updates);
+            } else {
+                const updates = { [field]: value };
+                await db.instruments.update(id, updates);
+            }
+            setEditingCell(null);
+        } catch (err) {
+            console.error("Inline save failed", err);
+            toast.error("Failed to save change");
+        }
+    };
+
+    const handleInlineKeyDown = (e, id, isCustom, field, value) => {
+        if (e.key === 'Enter') {
+            handleInlineSave(id, isCustom, field, value);
+        } else if (e.key === 'Escape') {
+            setEditingCell(null);
+        }
+    };
+
     if (!rawInstruments) return <div className="p-4 text-[#666]">Loading...</div>;
 
     const isActive = (id) => location.pathname === `/app/instrument/${id}`;
@@ -687,18 +764,6 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
 
     return (
         <div className="flex flex-col h-full relative bg-[var(--bg-app)] min-h-0">
-            {/* Inline Delete Confirmation */}
-            {pendingDelete && (
-                <div className="bg-red-900/40 border-b border-red-500/40 px-6 py-3 flex items-center justify-between shrink-0 z-10">
-                    <span className="text-sm text-red-300 font-medium">
-                        Delete {pendingDelete.ids.length} instrument{pendingDelete.ids.length > 1 ? 's' : ''}? This cannot be undone.
-                    </span>
-                    <div className="flex gap-2">
-                        <button onClick={() => setPendingDelete(null)} className="px-3 py-1 text-xs border border-[var(--border-subtle)] rounded text-[var(--text-secondary)] hover:text-white transition-colors">Cancel</button>
-                        <button onClick={handleDeleteConfirmed} className="px-3 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded font-semibold transition-colors">Delete</button>
-                    </div>
-                </div>
-            )}
             {/* Inline Renumber Confirmation */}
             {pendingRenumber && (
                 <div className="bg-amber-900/30 border-b border-amber-500/40 px-6 py-3 flex items-center justify-between shrink-0 z-10">
@@ -799,7 +864,16 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
             )}
 
             {/* Content Area */}
-            <div ref={parentRef} className="flex-1 overflow-auto relative select-none w-full">
+            <div 
+                ref={parentRef} 
+                className="flex-1 overflow-auto relative select-none w-full"
+                onMouseDown={(e) => {
+                    // Clear selection if clicking exactly the container or the table (but not rows/cells)
+                    if (e.target === parentRef.current || e.target.tagName === 'TABLE' || e.target.tagName === 'TBODY') {
+                        setSelectedIds(new Set());
+                    }
+                }}
+            >
                 {isMobileRefresh ? (
                     <InstrumentCardList
                         parentRef={parentRef}
@@ -925,16 +999,52 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
                                     key={virtualRow.key}
                                     data-index={virtualRow.index}
                                     ref={rowVirtualizer.measureElement}
-                                    onClick={(e) => handleRowClick(e, inst)}
+                                    onMouseDown={(e) => {
+                                        if (e.button !== 0) return;
+                                        if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('.no-drag')) return;
+                                        
+                                        setIsDraggingSelection(true);
+                                        setDragStartIndex(virtualRow.index);
+                                        
+                                        const hasModifiers = e.ctrlKey || e.metaKey || e.shiftKey;
+                                        if (!hasModifiers) {
+                                            setSelectedIds(new Set([inst.id]));
+                                            setLastSelectedId(inst.id);
+                                        } else {
+                                            toggleSelection(inst.id, e);
+                                        }
+                                    }}
+                                    onMouseEnter={() => {
+                                        if (isDraggingSelection && dragStartIndex !== null) {
+                                            const start = Math.min(dragStartIndex, virtualRow.index);
+                                            const end = Math.max(dragStartIndex, virtualRow.index);
+                                            const newSelection = new Set(selectedIds);
+                                            
+                                            for (let i = start; i <= end; i++) {
+                                                const rowItem = rowItems[i];
+                                                if (rowItem && rowItem.type === 'instrument') {
+                                                    newSelection.add(rowItem.data.id);
+                                                }
+                                            }
+                                            setSelectedIds(newSelection);
+                                        }
+                                    }}
+                                    onMouseMove={() => {
+                                        if (isDraggingSelection && clickTimeoutRef.current) {
+                                            clearTimeout(clickTimeoutRef.current);
+                                            clickTimeoutRef.current = null;
+                                        }
+                                    }}
                                     onContextMenu={(e) => handleContextMenu(e, inst)}
                                     className={classNames(
                                         "cursor-pointer border-b border-[var(--border-subtle)] transition-colors group text-[var(--text-primary)] hover:bg-[var(--bg-hover)]",
                                         {
                                             "bg-[var(--accent-primary)]/20": selected,
                                             "bg-[var(--accent-primary)]/10": active && !selected,
-                                            "bg-white/[0.02]": isEven && !selected && !active, // Zebra Stripe
+                                            "bg-white/[0.02]": isEven && !selected && !active,
                                             "h-9": isCompact,
-                                            "h-12": !isCompact
+                                            "h-12": !isCompact,
+                                            "select-none": isDraggingSelection
                                         }
                                     )}
                                     style={{
@@ -943,14 +1053,12 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
                                 >
                                     {/* Checkbox */}
                                     <td className="p-0 border-r border-[var(--border-subtle)] text-center relative w-[40px] max-w-[40px]">
-                                        {/* Wrapper for absolute positioning or centering if needed, but td text-center works well */}
-                                        <div className="flex justify-center items-center h-full w-full" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex justify-center items-center h-full w-full pointer-events-none">
                                             <input
                                                 type="checkbox"
                                                 checked={!!selected}
                                                 onChange={() => { }}
-                                                onClick={(e) => toggleSelection(inst.id, e)}
-                                                className="cursor-pointer rounded border-gray-600 bg-[#2b2b30] checked:bg-[var(--accent-primary)] focus:ring-[var(--accent-primary)]"
+                                                className="rounded border-gray-600 bg-[#2b2b30] checked:bg-[var(--accent-primary)] focus:ring-[var(--accent-primary)]"
                                             />
                                         </div>
                                     </td>
@@ -959,7 +1067,29 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
                                     {visibleCols.map(col => {
                                         const cellClass = classNames("px-3 border-r border-[var(--border-subtle)] overflow-hidden whitespace-nowrap h-full relative", { "text-xs px-2": isCompact });
                                         const commonProps = {
-                                            onClick: (e) => handleCellClick(e, inst, col.id)
+                                            onClick: (e) => handleCellClick(e, inst, col.id),
+                                            onDoubleClick: (e) => {
+                                                e.stopPropagation();
+                                                const val = col.isCustom ? (inst.customFields ? inst.customFields[col.id] : '') : inst[col.id];
+                                                setEditingCell({ id: inst.id, field: col.id, isCustom: !!col.isCustom, value: val || '' });
+                                            }
+                                        };
+
+                                        const renderCellContent = (originalContent) => {
+                                            if (editingCell && editingCell.id === inst.id && editingCell.field === col.id) {
+                                                return (
+                                                    <input
+                                                        autoFocus
+                                                        className="absolute inset-0 w-full h-full px-2 bg-[var(--bg-card)] border-2 border-[var(--accent-primary)] outline-none text-[var(--text-primary)] z-30"
+                                                        value={editingCell.value}
+                                                        onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
+                                                        onBlur={() => handleInlineSave(inst.id, editingCell.isCustom, col.id, editingCell.value)}
+                                                        onKeyDown={(e) => handleInlineKeyDown(e, inst.id, editingCell.isCustom, col.id, editingCell.value)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
+                                                );
+                                            }
+                                            return originalContent;
                                         };
 
                                         if (col.id === 'channel') {
@@ -982,18 +1112,22 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
 
                                             return (
                                                 <td key={col.id} className={cellClass} {...commonProps} style={partStyles}>
-                                                    {showAsPart && (
-                                                        <div className="absolute left-0 top-0 bottom-0 w-[12px] border-b-2 border-l-2 border-[var(--border-subtle)] rounded-bl-sm mb-[50%] ml-3 opacity-30 pointer-events-none"></div>
+                                                    {renderCellContent(
+                                                        <>
+                                                            {showAsPart && (
+                                                                <div className="absolute left-0 top-0 bottom-0 w-[12px] border-b-2 border-l-2 border-[var(--border-subtle)] rounded-bl-sm mb-[50%] ml-3 opacity-30 pointer-events-none"></div>
+                                                            )}
+                                                            <div className="flex items-center gap-1">
+                                                                {showAsPart ? (
+                                                                    <span className="font-bold text-[var(--accent-primary)] text-xs tracking-wider">
+                                                                        {channelDisplayMode === 'dots' ? `.${inst.part}` : `P${inst.part || 1}`}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className={classNames("font-bold font-mono", { "text-[var(--error)]": isChanDuplicate, "text-[var(--success)]": !isChanDuplicate })}>{inst.channel}</span>
+                                                                )}
+                                                            </div>
+                                                        </>
                                                     )}
-                                                    <div className="flex items-center gap-1">
-                                                        {showAsPart ? (
-                                                            <span className="font-bold text-[var(--accent-primary)] text-xs tracking-wider">
-                                                                {channelDisplayMode === 'dots' ? `.${inst.part}` : `P${inst.part || 1}`}
-                                                            </span>
-                                                        ) : (
-                                                            <span className={classNames("font-bold font-mono", { "text-[var(--error)]": isChanDuplicate, "text-[var(--success)]": !isChanDuplicate })}>{inst.channel}</span>
-                                                        )}
-                                                    </div>
                                                 </td>
                                             );
                                         }
@@ -1007,14 +1141,16 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
                                                     "text-[var(--error)] font-bold bg-red-500/10": isAddrDuplicate,
                                                     "text-yellow-500 font-bold bg-yellow-500/10": !inst.address || inst.address === '0:0' || inst.address === '0',
                                                 })} {...commonProps}>
-                                                    <div className="flex flex-col justify-center h-full">
-                                                        <div className="leading-tight">{displayAddr}</div>
-                                                        {rangeStr && (
-                                                            <div className="text-[9px] opacity-70 font-bold text-[var(--accent-primary)] leading-none mt-0.5">
-                                                                {rangeStr}
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                    {renderCellContent(
+                                                        <div className="flex flex-col justify-center h-full">
+                                                            <div className="leading-tight">{displayAddr}</div>
+                                                            {rangeStr && (
+                                                                <div className="text-[9px] opacity-70 font-bold text-[var(--accent-primary)] leading-none mt-0.5">
+                                                                    {rangeStr}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </td>
                                             );
                                         }
@@ -1022,17 +1158,25 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
                                         if (col.id === 'color') {
                                             return (
                                                 <td key={col.id} className={classNames(cellClass, "group-hover:text-[var(--text-primary)]")} {...commonProps}>
-                                                    <div className="flex items-center h-full gap-2">
-                                                        <ColorSwatch color={inst.color} className="w-3 h-3 flex-none" rounded="rounded-sm" />
-                                                        <span className="truncate">{inst.color}</span>
-                                                    </div>
+                                                    {renderCellContent(
+                                                        <div className="flex items-center h-full gap-2">
+                                                            <ColorSwatch color={inst.color} className="w-3 h-3 flex-none" rounded="rounded-sm" />
+                                                            <span className="truncate">{inst.color}</span>
+                                                        </div>
+                                                    )}
                                                 </td>
                                             );
                                         }
 
                                         return (
-                                            <td key={col.id} className={classNames(cellClass, "text-ellipsis")} {...commonProps}>
-                                                {col.isCustom ? (inst.customFields ? inst.customFields[col.id] : '') : inst[col.id]}
+                                            <td 
+                                                key={col.id} 
+                                                className={classNames(cellClass, "text-ellipsis")} 
+                                                {...commonProps}
+                                            >
+                                                {renderCellContent(
+                                                    col.isCustom ? (inst.customFields ? inst.customFields[col.id] : '') : inst[col.id]
+                                                )}
                                             </td>
                                         );
                                     })}
@@ -1060,21 +1204,47 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
             {/* Footer info or Bulk Action */}
             {selectedIds && selectedIds.size > 0 ? (
                 <div className="h-12 border-t border-[var(--accent-primary)] bg-[var(--bg-panel)] flex items-center px-4 justify-between shrink-0 z-20">
-                    <div className="text-sm font-semibold text-[var(--accent-primary)]">
-                        {selectedIds.size} selected
-                    </div>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-3">
+                        <div className="text-sm font-semibold text-[var(--accent-primary)]">
+                            {selectedIds.size} selected
+                        </div>
                         <button
-                            className="text-xs px-3 py-1.5 rounded bg-[var(--bg-card)] border border-[var(--border-default)] hover:border-[var(--text-primary)] hover:text-[var(--text-primary)] transition-colors"
+                            className="text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
                             onClick={() => setSelectedIds(new Set())}
                         >
                             Clear
                         </button>
+                    </div>
+                    <div className="flex gap-2">
                         <button
-                            className="text-xs px-3 py-1.5 rounded bg-[var(--bg-card)] border border-[var(--border-default)] hover:border-[var(--text-primary)] hover:text-[var(--text-primary)] transition-colors"
+                            className={`text-xs px-3 py-1.5 rounded transition-all duration-300 flex items-center gap-2 font-bold ${
+                                !isDeleteConfirmed ? 'bg-[var(--bg-card)] border border-[var(--border-default)] text-[var(--error)] hover:border-[var(--error)] hover:bg-[var(--error)]/5' : ''
+                            }`}
+                            style={isDeleteConfirmed ? { backgroundColor: 'var(--error)', color: 'var(--accent-text)', boxShadow: '0 0 0 4px rgba(239, 68, 68, 0.2)' } : {}}
+                            onClick={handleDeleteSelected}
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                {isDeleteConfirmed ? (
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                ) : (
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                )}
+                            </svg>
+                            {isDeleteConfirmed ? `Delete ${selectedIds.size}` : 'Delete'}
+                        </button>
+                        <button
+                            className="text-xs px-3 py-1.5 rounded bg-[var(--bg-card)] border border-[var(--border-default)] hover:border-[var(--text-primary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-2"
                             onClick={handleDuplicate}
                         >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                             Duplicate
+                        </button>
+                        <button
+                            className="text-xs px-4 py-1.5 rounded bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)] transition-colors shadow-lg shadow-indigo-500/20 font-bold flex items-center gap-2"
+                            onClick={() => setIsBatchEditOpen(true)}
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            Bulk Edit
                         </button>
                     </div>
                 </div>

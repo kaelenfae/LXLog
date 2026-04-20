@@ -17,6 +17,7 @@ import { EosTargetsReport } from './components/EosTargetsReport';
 import { PowerReport } from './components/PowerReport';
 import { PatchNotes } from './components/PatchNotes';
 import { db, seedDatabase, exportShow, importShow, createNewShow, importEosCsv, importLightwrightTxt, importMa2Xml, importMvr } from './db';
+import { exportToEosCsv, exportToLightwright, exportToGenericCsv } from './utils/dataExporters';
 import { ToastProvider, useToast } from './components/Toast';
 import './index.css';
 
@@ -28,12 +29,14 @@ import { FixtureLibrary } from './components/FixtureLibrary';
 import { DmxUniverseView } from './components/DmxUniverseView';
 import { PrintCenter } from './components/PrintCenter';
 import { MobileBottomNav } from './components/MobileBottomNav';
+import { ExportWizardModal } from './components/ExportWizardModal';
 import { useSettings } from './hooks/useSettings';
 
 function App() {
   const [showModal, setShowModal] = React.useState(false);
   const [showSettings, setShowSettings] = React.useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const [showImportWizard, setShowImportWizard] = React.useState(false);
   const [showImportModal, setShowImportModal] = React.useState(false);
 
   useEffect(() => {
@@ -274,6 +277,7 @@ function AppContent({ isSidebarOpen, setIsSidebarOpen, handleLoad, handleSave, h
   const settings = useSettings();
 
   const [isMobile, setIsMobile] = React.useState(window.innerWidth < 768);
+  const [showExportWizard, setShowExportWizard] = React.useState(false);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -341,8 +345,17 @@ function AppContent({ isSidebarOpen, setIsSidebarOpen, handleLoad, handleSave, h
             onClick={handleImport}
             className={classNames("flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded-md transition-colors", { "hidden md:flex": isMobileRefresh })}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
             <span className="hidden lg:inline">Import</span>
+          </button>
+
+          {/* Export Wizard Trigger */}
+          <button
+            onClick={() => setShowExportWizard(true)}
+            className={classNames("flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded-md transition-colors", { "hidden md:flex": isMobileRefresh })}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+            <span className="hidden lg:inline">Export</span>
           </button>
           
           <button onClick={() => setShowSettings(true)} className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded transition-colors" title="Settings">
@@ -375,6 +388,7 @@ function AppContent({ isSidebarOpen, setIsSidebarOpen, handleLoad, handleSave, h
 
       {/* Main Content - Grid Area: main */}
       <main style={{ gridArea: 'main' }} className="overflow-hidden relative bg-[var(--bg-app)] min-w-0 min-h-0 print:absolute print:top-0 print:left-0 print:z-50 print:bg-white print:overflow-visible print:w-full print:h-auto print:min-h-screen">
+        {showExportWizard && <ExportWizardModal onClose={() => setShowExportWizard(false)} />}
         <Routes>
           <Route path="/app" element={<MasterDetailLayout MasterComponent={InstrumentSchedule} />}>
             <Route index element={

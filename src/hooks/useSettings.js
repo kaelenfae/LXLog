@@ -25,6 +25,7 @@ function readSettings() {
         // Universe separator (: or /)
         universeSeparator: localStorage.getItem('universeSeparator') || ':',
         mobileRefresh: localStorage.getItem('mobileRefresh') !== 'false',
+        showAllFixtureTypes: localStorage.getItem('showAllFixtureTypes') === 'true',
     };
 }
 

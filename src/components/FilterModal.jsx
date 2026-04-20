@@ -19,6 +19,7 @@ export function FilterModal({
             missingAddress: false,
             missingChannel: false,
             duplicates: false,
+            incompleteOnly: false,
             searchQuery: ''
         });
     };
@@ -128,6 +129,17 @@ export function FilterModal({
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" checked={filters.missingChannel} onChange={e => updateFilter('missingChannel', e.target.checked)} className="sr-only peer" />
+                                <div className="w-10 h-5 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--accent-primary)]"></div>
+                            </label>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-[var(--bg-card)] rounded border border-[var(--border-subtle)]">
+                            <div>
+                                <div className="text-sm font-medium">Incomplete Only</div>
+                                <div className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-tight">Show fixtures missing core info</div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked={filters.incompleteOnly} onChange={e => updateFilter('incompleteOnly', e.target.checked)} className="sr-only peer" />
                                 <div className="w-10 h-5 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--accent-primary)]"></div>
                             </label>
                         </div>

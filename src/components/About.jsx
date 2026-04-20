@@ -74,33 +74,48 @@ export function About() {
                                 <div className="space-y-6 text-sm text-[var(--text-secondary)]">
                                     {/* Importing */}
                                     <div>
-                                        <h5 className="font-semibold text-[var(--text-primary)] mb-2">Importing Data</h5>
+                                        <h5 className="font-semibold text-[var(--text-primary)] mb-2">Importing & External Data</h5>
                                         <p className="mb-2">Use the <span className="text-[var(--text-primary)] font-medium">Import</span> dropdown in the header to bring in data from other platforms.</p>
                                         <ul className="list-disc list-inside space-y-1 ml-2">
                                             <li><strong>EOS CSV:</strong> Import patch data exported from ETC Eos consoles.</li>
                                             <li><strong>Lightwright Text:</strong> Import standard text exports from Lightwright.</li>
                                             <li><strong>MA2 XML:</strong> Import fixture layers exported as XML from GrandMA2.</li>
-                                            <li><strong>MVR:</strong> Import from My Virtual Rig files exported by Vectorworks, Capture, or other MVR-compatible tools.</li>
-                                            <li><span className="opacity-50">MA3 XML:</span> Coming soon!</li>
+                                            <li><span className="opacity-40 italic">MVR: My Virtual Rig files (Currently Disabled)</span></li>
                                         </ul>
-                                        <p className="mt-2 text-xs italic">
-                                            Note: When importing, you can choose to <strong>Create New</strong> (replacing everything) or <strong>Merge</strong> (updating existing channels and adding new ones) via the prompt.
-                                        </p>
+                                    </div>
+
+                                    {/* Fixture Library */}
+                                    <div>
+                                        <h5 className="font-semibold text-[var(--text-primary)] mb-2">Fixture Library</h5>
+                                        <p className="mb-2">The Fixture Library is your central hub for managing device profiles and automating data entry.</p>
+                                        <ul className="list-disc list-inside space-y-1 ml-2">
+                                            <li><strong>Import GDTF:</strong> Use the <em>Import GDTF</em> button to add new fixture definitions to your library.</li>
+                                            <li><strong>Fixture Details:</strong> Click any fixture card to open its detailed profile, including:
+                                                <ul className="list-[circle] list-inside ml-5 mt-1 opacity-80">
+                                                    <li><strong>DMX Map:</strong> View unrolled 16-bit/24-bit channel mappings with functional details.</li>
+                                                    <li><strong>Wheels:</strong> See color wheels, gobos, and slot visualizations.</li>
+                                                    <li><strong>Physical:</strong> Review manufacturer specs, weight, and power data.</li>
+                                                    <li><strong>Raw XML:</strong> Inspect the original source code of the GDTF profile.</li>
+                                                </ul>
+                                            </li>
+                                            <li><strong>Auto-Population:</strong> Once a fixture is in your library, selecting it in the <em>Instrument Detail</em> panel will automatically populate its DMX footprint and other metadata.</li>
+                                        </ul>
                                     </div>
 
                                     {/* managing fixtures */}
                                     <div>
                                         <h5 className="font-semibold text-[var(--text-primary)] mb-2">Managing Fixtures</h5>
                                         <ul className="list-disc list-inside space-y-1 ml-2">
-                                            <li><strong>Add:</strong> Click <em>Add Instrument</em> in the Instrument Schedule toolbar.</li>
-                                            <li><strong>Edit:</strong> Click on any cell to edit that specific field in the Detail View.</li>
-                                            <li><strong>Selection:</strong> Click the checkbox row to select a fixture.
+                                            <li><strong>Add/Edit:</strong> Click <em>Add Instrument</em> in the toolbar, or <strong>Double-click</strong> any row in the table to edit immediately.</li>
+                                            <li><strong>Selection:</strong>
                                                 <ul className="list-[circle] list-inside ml-5 mt-1 opacity-80">
-                                                    <li>Hold <strong>Shift</strong> to select a range of fixtures.</li>
-                                                    <li>Select multiple fixtures to enable <strong>Batch Edit</strong> or <strong>Duplicate</strong> actions in the footer.</li>
+                                                    <li><strong>Click & Drag:</strong> Drag over checkboxes to select multiple rows quickly.</li>
+                                                    <li><strong>Shift + Click:</strong> Select a range of fixtures.</li>
+                                                    <li><strong>Batch Edit:</strong> Select multiple fixtures to enable the Batch Edit footer.</li>
                                                 </ul>
                                             </li>
-                                            <li><strong>Duplicate:</strong> Select one or more fixtures and click <em>Duplicate</em> in the footer selection bar to create copies.</li>
+                                            <li><strong>Delete:</strong> Click the trash icon twice to delete. Anywhere else to cancel.</li>
+                                            <li><strong>Export:</strong> Use the <strong>Export</strong> menu to generate Eos Patch CSVs, Lightwright TSVs, or generic spreadsheets.</li>
                                         </ul>
                                     </div>
 
@@ -108,9 +123,10 @@ export function About() {
                                     <div>
                                         <h5 className="font-semibold text-[var(--text-primary)] mb-2">Views & Reports</h5>
                                         <ul className="list-disc list-inside space-y-1 ml-2">
-                                            <li><strong>Instrument Schedule:</strong> Main spreadsheet view of all equipment. Sort by clicking column headers.</li>
-                                            <li><strong>Print Center:</strong> Bundle multiple reports into a single, professional PDF with custom cover pages.</li>
+                                            <li><strong>Instrument Schedule:</strong> The main spreadsheet view. Customize columns using the gear icon.</li>
+                                            <li><strong>Print Center:</strong> Bundle multiple reports into a single PDF with custom cover pages.</li>
                                             <li><strong>Reports:</strong> Generate specialized paperwork like Channel Hookups, Hanging Schedules, and Patch reports.</li>
+                                            <li><strong>DMX Universe:</strong> Visual representation of your patch.</li>
                                         </ul>
                                     </div>
 

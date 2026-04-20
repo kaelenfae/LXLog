@@ -14,7 +14,8 @@ export function InstrumentDetail() {
     const isNew = id === 'new';
     const isBulk = location.pathname.includes('/bulk');
     const bulkIds = location.state?.ids || [];
-    const { universeSeparator } = useSettings();
+    const settings = useSettings();
+    const { universeSeparator, showAllFixtureTypes } = settings;
     const { onToggleDetail } = useOutletContext() || {};
 
     const [touchedFields, setTouchedFields] = useState(new Set());
@@ -36,6 +37,7 @@ export function InstrumentDetail() {
         color: '',
         gelFrameSize: '',
         fixtureTypeId: '',
+        dmxMode: '',
         customFields: {}
     });
 
@@ -50,7 +52,7 @@ export function InstrumentDetail() {
 
     // GDTF Fixture Library
     const fixtureLibrary = useLiveQuery(() => db.fixtureLibrary.toArray()) || [];
-    const [showFixturePopulate, setShowFixturePopulate] = useState(false);
+    const [showTypeSuggestions, setShowTypeSuggestions] = useState(false);
     const [showDmxMap, setShowDmxMap] = useState(false);
     const [showColorPicker, setShowColorPicker] = useState(false);
 
@@ -67,6 +69,7 @@ export function InstrumentDetail() {
     const [activeTab, setActiveTab] = useState('general');
     const notes = useLiveQuery(() => (isNew || isBulk) ? [] : getInstrumentNotes(id), [id, isNew, isBulk]);
     const [newNote, setNewNote] = useState('');
+    const [deleteTimer, setDeleteTimer] = useState(null);
 
     // Load data if editing
     const singleInstrument = useLiveQuery(
@@ -113,20 +116,28 @@ export function InstrumentDetail() {
         const instruments = await db.instruments.toArray();
         const positions = new Set();
         const purposes = new Set();
-        const types = new Set();
+        const typesInUse = new Set();
 
         instruments.forEach(inst => {
             if (inst.position) positions.add(inst.position);
             if (inst.purpose) purposes.add(inst.purpose);
-            if (inst.type) types.add(inst.type);
+            if (inst.type) typesInUse.add(inst.type);
         });
+
+        // Filter out library fixtures that are already in typesInUse
+        const libraryTypes = fixtureLibrary
+            .filter(f => !typesInUse.has(f.name))
+            .map(f => ({ name: f.name, isLibrary: true, fixture: f }));
 
         return {
             position: Array.from(positions).sort(),
             purpose: Array.from(purposes).sort(),
-            type: Array.from(types).sort()
+            type: [
+                ...Array.from(typesInUse).sort().map(t => ({ name: t, isLibrary: false })),
+                ...libraryTypes.sort((a, b) => a.name.localeCompare(b.name))
+            ]
         };
-    }, []);
+    }, [fixtureLibrary]);
 
     // All instruments for overlap detection
     const allInstruments = useLiveQuery(() => db.instruments.toArray()) || [];
@@ -202,6 +213,7 @@ export function InstrumentDetail() {
                 color: '',
                 gelFrameSize: '',
                 fixtureTypeId: '',
+                dmxMode: '',
                 customFields: {}
             });
         }
@@ -388,26 +400,50 @@ export function InstrumentDetail() {
         navigate('..');
     };
 
-    const handleDelete = () => {
-        // Show inline confirm instead of browser dialog
+    const handleDelete = (e) => {
+        e.stopPropagation();
+        // First click: turn button red and start timer
         setPendingDeleteContext(isBulk ? 'bulk' : 'single');
+        
+        if (deleteTimer) clearTimeout(deleteTimer);
+        const timer = setTimeout(() => {
+            setPendingDeleteContext(null);
+        }, 4000); // 4 second window to confirm
+        setDeleteTimer(timer);
     };
 
-    const handleDeleteConfirmed = async () => {
-        setPendingDeleteContext(null);
+    const handleDeleteConfirmed = async (e) => {
+        if (e) e.stopPropagation();
+        if (deleteTimer) clearTimeout(deleteTimer);
         if (isBulk) {
             await db.instruments.bulkDelete(bulkIds);
             // Cascade-delete orphaned notes
             await db.instrumentNotes.where('instrumentId').anyOf(bulkIds).delete();
             navigate('..');
-            return;
-        }
-        if (!isNew) {
+        } else if (!isNew) {
             await db.instruments.delete(Number(id));
             await db.instrumentNotes.where('instrumentId').equals(Number(id)).delete();
             navigate('..');
         }
     };
+
+    // Cancel deletion if clicking elsewhere
+    useEffect(() => {
+        if (!pendingDeleteContext) return;
+
+        const handleGlobalClick = () => {
+            setPendingDeleteContext(null);
+        };
+
+        const timer = setTimeout(() => {
+            window.addEventListener('click', handleGlobalClick);
+        }, 50);
+
+        return () => {
+            window.removeEventListener('click', handleGlobalClick);
+            clearTimeout(timer);
+        };
+    }, [pendingDeleteContext]);
 
     const handleAddCustomFieldSubmit = async () => {
         if (!newCustomFieldName || !newCustomFieldName.trim()) {
@@ -436,30 +472,6 @@ export function InstrumentDetail() {
 
     return (
         <div className="h-full flex flex-col bg-[var(--bg-card)] border-l border-[var(--border-subtle)]">
-            {/* Inline Delete Confirmation */}
-            {pendingDeleteContext && (
-                <div className="bg-red-900/40 border-b border-red-500/40 px-6 py-3 flex items-center justify-between shrink-0">
-                    <span className="text-sm text-red-300 font-medium">
-                        {pendingDeleteContext === 'bulk'
-                            ? `Delete ${bulkIds.length} instruments? This cannot be undone.`
-                            : 'Delete this instrument? This cannot be undone.'}
-                    </span>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => setPendingDeleteContext(null)}
-                            className="px-3 py-1 text-xs text-[var(--text-secondary)] hover:text-white border border-[var(--border-subtle)] rounded transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleDeleteConfirmed}
-                            className="px-3 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded transition-colors font-semibold"
-                        >
-                            Delete
-                        </button>
-                    </div>
-                </div>
-            )}
             {/* Panel Header */}
             <div className="h-14 border-b border-[var(--border-subtle)] flex items-center px-6 justify-between bg-[var(--bg-card)] shrink-0">
                 <div className="flex items-center gap-3">
@@ -485,8 +497,23 @@ export function InstrumentDetail() {
                 </div>
                 <div className="flex gap-2">
                     {!isNew && (
-                        <button onClick={handleDelete} className="p-2 text-[var(--error)] hover:bg-red-500/10 rounded transition-colors" title="Delete">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        <button 
+                            onClick={pendingDeleteContext ? handleDeleteConfirmed : handleDelete} 
+                            className={`p-2 rounded-md transition-all duration-300 flex items-center justify-center ${
+                                !pendingDeleteContext ? 'text-[var(--error)] hover:bg-[var(--error)]/10' : ''
+                            }`} 
+                            style={pendingDeleteContext ? { backgroundColor: 'var(--error)', color: 'var(--accent-text)', boxShadow: '0 0 0 4px rgba(239, 68, 68, 0.2)' } : {}}
+                            title={pendingDeleteContext ? "Confirm Delete" : "Delete"}
+                        >
+                            {pendingDeleteContext ? (
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                            ) : (
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            )}
                         </button>
                     )}
                 </div>
@@ -608,20 +635,52 @@ export function InstrumentDetail() {
                         <div className="grid grid-cols-4 gap-4 mb-4">
                             <div className="col-span-2 flex flex-col gap-1.5 relative">
                                 <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Type</label>
-                                {fixtureLibrary.length > 0 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowFixturePopulate(true)}
-                                        className="absolute top-0 right-0 px-1 py-0 text-[7px] leading-none bg-[var(--bg-hover)] border border-[var(--border-subtle)] rounded-sm hover:border-[var(--accent-primary)] text-[var(--text-tertiary)] hover:text-[var(--accent-primary)] transition-colors uppercase tracking-tight font-bold"
-                                        title="Populate from GDTF fixture library"
-                                    >
-                                        GDTF
-                                    </button>
-                                )}
-                                <input name="type" value={formData.type || ''} onChange={handleChange} className="panel-input w-full" autoComplete="off" list="list-type" />
-                                <datalist id="list-type">
-                                    {suggestions?.type.map(val => <option key={val} value={val} />)}
-                                </datalist>
+                                <div className="relative">
+                                    <input
+                                        name="type"
+                                        value={formData.type || ''}
+                                        onChange={handleChange}
+                                        onFocus={() => setShowTypeSuggestions(true)}
+                                        onBlur={() => setTimeout(() => setShowTypeSuggestions(false), 200)}
+                                        className="panel-input w-full"
+                                        autoComplete="off"
+                                    />
+                                    {showTypeSuggestions && suggestions?.type && suggestions.type.length > 0 && (
+                                        <div className="absolute top-full left-0 right-0 z-50 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-md shadow-xl mt-1 max-h-60 overflow-auto">
+                                            {suggestions.type
+                                                .filter(t => showAllFixtureTypes || !formData.type || t.name.toLowerCase().includes(formData.type.toLowerCase()))
+                                                .map((t, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (t.isLibrary) {
+                                                                const footprint = t.fixture.dmxModes?.[0]?.footprint || 1;
+                                                                const defaultMode = t.fixture.dmxModes?.[0]?.name || '';
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    type: t.name,
+                                                                    watt: t.fixture.wattage || prev.watt,
+                                                                    dmxFootprint: footprint,
+                                                                    fixtureTypeId: t.fixture.fixtureTypeId,
+                                                                    dmxMode: defaultMode
+                                                                }));
+                                                            } else {
+                                                                setFormData(prev => ({ ...prev, type: t.name }));
+                                                            }
+                                                            setShowTypeSuggestions(false);
+                                                        }}
+                                                        className="w-full text-left px-3 py-2 hover:bg-[var(--bg-hover)] transition-colors border-b border-[var(--border-subtle)] last:border-0 flex flex-col"
+                                                    >
+                                                        <span className={`text-sm ${t.isLibrary ? 'text-[var(--text-tertiary)]' : 'text-[var(--text-primary)] font-bold'}`}>
+                                                            {t.name}
+                                                        </span>
+                                                    </button>
+                                                ))
+                                            }
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="col-span-2 flex flex-col gap-1.5">
@@ -632,11 +691,51 @@ export function InstrumentDetail() {
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0">
                                         <ColorSwatch color={formData.color} className="w-6 h-6 border-[var(--border-subtle)]" rounded="rounded-md" />
+                                        
+                                        {/* GDTF Color Wheels */}
+                                        {linkedFixture && linkedFixture.wheels?.some(w => w.name.toLowerCase().includes('color')) && (
+                                            <div className="relative group">
+                                                <button
+                                                    type="button"
+                                                    className="p-1.5 rounded-md bg-[var(--bg-hover)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)] transition-colors"
+                                                    title="Select from Fixture Color Wheel"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.673.337a4 4 0 01-2.506.326l-1.91-.477a4 4 0 00-3.86 1.052l-1.052 1.052a2 2 0 00.547 3.102l2.387.477a6 6 0 003.86-.517l.673-.337a4 4 0 012.506-.326l1.91.477a4 4 0 003.86-1.052l1.052-1.052a2 2 0 00-.547-3.102zM12 8a4 4 0 100-8 4 4 0 000 8z" />
+                                                    </svg>
+                                                </button>
+                                                <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover:block">
+                                                    <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-lg shadow-xl p-3 w-64 max-h-80 overflow-auto">
+                                                        <div className="text-xs font-medium text-[var(--text-primary)] mb-2">Fixture Colors</div>
+                                                        {linkedFixture.wheels.filter(w => w.name.toLowerCase().includes('color')).map((wheel, wheelIdx) => (
+                                                            <div key={wheelIdx} className="mb-3">
+                                                                <div className="text-[10px] text-[var(--accent-primary)] mb-2 uppercase tracking-tight font-bold">{wheel.name}</div>
+                                                                <div className="grid grid-cols-4 gap-2">
+                                                                    {wheel.slots.map((slot, slotIdx) => (
+                                                                        <button
+                                                                            key={slotIdx}
+                                                                            type="button"
+                                                                            onClick={() => setFormData(prev => ({ ...prev, color: slot.name }))}
+                                                                            className={`aspect-square rounded border transition-all flex items-center justify-center ${formData.color === slot.name ? 'border-[var(--accent-primary)] ring-2 ring-[var(--accent-primary)]' : 'border-[var(--border-subtle)] hover:border-[var(--text-tertiary)]'}`}
+                                                                            title={slot.name}
+                                                                            style={{ backgroundColor: slot.cssColor || '#ffffff' }}
+                                                                        >
+                                                                            {!slot.cssColor && <span className="text-[8px] opacity-40">?</span>}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <button
                                             type="button"
                                             onClick={() => setShowColorPicker(true)}
                                             className="p-1.5 rounded-md bg-[var(--bg-hover)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)] transition-colors"
-                                            title="Open Color Picker"
+                                            title="Open Gel Library"
                                         >
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
@@ -647,6 +746,38 @@ export function InstrumentDetail() {
                             </div>
                         </div>
 
+                        {linkedFixture && linkedFixture.dmxModes?.length > 1 && (
+                            <div className="grid grid-cols-4 gap-4 mb-4">
+                                <div className="col-span-2 flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium text-[var(--accent-primary)] uppercase tracking-wider flex items-center gap-1.5">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg>
+                                        DMX Mode
+                                    </label>
+                                    <select 
+                                        name="dmxMode" 
+                                        value={formData.dmxMode || ''} 
+                                        onChange={(e) => {
+                                            const modeName = e.target.value;
+                                            const mode = linkedFixture.dmxModes.find(m => m.name === modeName);
+                                            setFormData(prev => ({ 
+                                                ...prev, 
+                                                dmxMode: modeName,
+                                                dmxFootprint: mode?.footprint || prev.dmxFootprint
+                                            }));
+                                        }}
+                                        className="panel-input text-xs font-semibold py-1.5"
+                                    >
+                                        {linkedFixture.dmxModes.map(mode => (
+                                            <option key={mode.name} value={mode.name}>
+                                                {mode.name} ({mode.footprint}ch)
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="col-span-2"></div>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-3 gap-4 mb-4">
                             <div className="flex flex-col gap-1.5">
                                 <div className="flex items-center gap-1">
@@ -655,33 +786,36 @@ export function InstrumentDetail() {
                                         <div className="relative group">
                                             <button
                                                 type="button"
-                                                className="w-4 h-4 text-[10px] font-bold rounded-full bg-[var(--bg-hover)] border border-[var(--border-subtle)] text-[var(--text-tertiary)] hover:text-[var(--accent-primary)] hover:border-[var(--accent-primary)] transition-colors flex items-center justify-center leading-none cursor-help"
+                                                className="w-5 h-5 rounded-md bg-[var(--bg-hover)] border border-[var(--border-subtle)] text-[var(--text-tertiary)] hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)] transition-colors flex items-center justify-center leading-none"
+                                                title="Select from Fixture Gobo Wheel"
                                             >
-                                                ?
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                </svg>
                                             </button>
                                             <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover:block">
                                                 <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-lg shadow-xl p-3 w-72 max-h-80 overflow-auto">
-                                                    <div className="text-xs font-medium text-[var(--text-primary)] mb-2">
-                                                        Available Gobos
-                                                    </div>
+                                                    <div className="text-xs font-medium text-[var(--text-primary)] mb-2">Fixture Gobos</div>
                                                     {linkedFixture.wheels.filter(w => w.name.toLowerCase().includes('gobo')).map((wheel, wheelIdx) => (
                                                         <div key={wheelIdx} className="mb-3">
-                                                            <div className="text-[10px] text-[var(--accent-primary)] mb-2">{wheel.name}</div>
+                                                            <div className="text-[10px] text-[var(--accent-primary)] mb-2 uppercase tracking-tight font-bold">{wheel.name}</div>
                                                             <div className="grid grid-cols-4 gap-1.5">
-                                                                {wheel.slots.filter(s => s.name).map((slot, slotIdx) => (
+                                                                {wheel.slots.map((slot, slotIdx) => (
                                                                     <button
                                                                         key={slotIdx}
                                                                         type="button"
                                                                         onClick={() => setFormData(prev => ({ ...prev, gobo: slot.name }))}
                                                                         className={`aspect-square rounded border overflow-hidden flex items-center justify-center transition-colors ${formData.gobo === slot.name
-                                                                            ? 'border-[var(--accent-primary)] ring-1 ring-[var(--accent-primary)]'
+                                                                            ? 'border-[var(--accent-primary)] ring-2 ring-[var(--accent-primary)]'
                                                                             : 'border-[var(--border-subtle)] hover:border-[var(--text-tertiary)]'}`}
                                                                         title={slot.name}
                                                                     >
                                                                         {slot.imageData ? (
                                                                             <img src={slot.imageData} alt={slot.name} className="w-full h-full object-contain" />
                                                                         ) : (
-                                                                            <span className="text-[8px] text-[var(--text-tertiary)] text-center px-0.5 break-words">{slot.name}</span>
+                                                                            <div className="w-full h-full bg-[var(--bg-panel)] flex items-center justify-center">
+                                                                                <span className="text-[8px] text-[var(--text-tertiary)] text-center px-0.5 break-words leading-tight">{slot.name}</span>
+                                                                            </div>
                                                                         )}
                                                                     </button>
                                                                 ))}
@@ -727,29 +861,32 @@ export function InstrumentDetail() {
                                             </button>
                                             {/* Hover Tooltip */}
                                             <div className="absolute bottom-full left-0 mb-1 z-50 hidden group-hover:block">
-                                                <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-lg shadow-xl p-3 w-64 max-h-64 overflow-auto">
-                                                    <div className="text-xs font-medium text-[var(--text-primary)] mb-2">
-                                                        {linkedFixture.name} - DMX Map
-                                                    </div>
-                                                    {linkedFixture.dmxModes.slice(0, 1).map((mode, modeIdx) => (
-                                                        <div key={modeIdx}>
-                                                            <div className="text-[10px] text-[var(--accent-primary)] mb-1">{mode.name} ({mode.footprint}ch)</div>
-                                                            {mode.channels && mode.channels.length > 0 ? (
-                                                                <div className="space-y-0.5">
-                                                                    {mode.channels.map((ch, idx) => (
-                                                                        <div key={idx} className="flex text-[10px] font-mono">
-                                                                            <span className="w-6 text-[var(--accent-primary)]">{ch.index}</span>
-                                                                            <span className="text-[var(--text-secondary)] flex-1">{ch.attribute}</span>
-                                                                            {ch.resolution && <span className="text-[var(--text-tertiary)]">{ch.resolution}</span>}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            ) : (
-                                                                <div className="text-[10px] text-[var(--text-tertiary)] italic">No channel data</div>
-                                                            )}
+                                                    <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-lg shadow-xl p-4 w-72 max-h-96 overflow-auto">
+                                                        <div className="text-xs font-bold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                                                            <svg className="w-4 h-4 text-[var(--accent-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
+                                                            {linkedFixture.name} DMX Map
                                                         </div>
-                                                    ))}
-                                                </div>
+                                                        {linkedFixture.dmxModes.filter(m => !formData.dmxMode || m.name === formData.dmxMode).map((mode, modeIdx) => (
+                                                            <div key={modeIdx}>
+                                                                <div className="text-[10px] text-[var(--accent-primary)] mb-2 font-mono uppercase tracking-widest border-b border-[var(--border-subtle)] pb-1">{mode.name}</div>
+                                                                {mode.channels && mode.channels.length > 0 ? (
+                                                                    <div className="space-y-1.5">
+                                                                        {mode.channels.map((ch, idx) => (
+                                                                            <div key={idx} className="flex flex-col gap-0.5 pb-1.5 border-b border-[var(--bg-panel)] last:border-0">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="w-10 text-[10px] font-bold text-[var(--accent-primary)] font-mono shrink-0">{ch.index}</span>
+                                                                                    <span className="text-xs text-[var(--text-primary)] font-medium flex-1">{ch.prettyAttribute || ch.attribute}</span>
+                                                                                    {ch.resolution && <span className="text-[9px] text-[var(--text-tertiary)] bg-[var(--bg-app)] px-1 rounded">{ch.resolution}</span>}
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="text-[10px] text-[var(--text-tertiary)] italic">No channel data</div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                             </div>
                                         </div>
                                     )}
@@ -944,82 +1081,6 @@ export function InstrumentDetail() {
                                         setShowDupConfirm(false);
                                         setPendingSaveData(null);
                                     }}
-                                    className="w-full py-2 text-sm text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
-            {/* GDTF Fixture Selection Modal */}
-            {
-                showFixturePopulate && (
-                    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-                        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-lg shadow-2xl p-6 w-full max-w-md max-h-[70vh] flex flex-col">
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-lg font-bold text-[var(--text-primary)]">Select GDTF Fixture</h2>
-                                <button
-                                    onClick={() => setShowFixturePopulate(false)}
-                                    className="p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-                            <p className="text-sm text-[var(--text-secondary)] mb-4">
-                                Select a fixture to populate Type, Wattage, Weight, and DMX Footprint from GDTF data.
-                            </p>
-                            <div className="flex-1 overflow-auto space-y-2">
-                                {fixtureLibrary.map(fixture => {
-                                    const defaultMode = fixture.dmxModes?.[0];
-                                    const footprint = defaultMode?.footprint || 1;
-                                    return (
-                                        <button
-                                            key={fixture.id}
-                                            type="button"
-                                            onClick={() => {
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    fixtureTypeId: fixture.fixtureTypeId,
-                                                    type: fixture.name || prev.type,
-                                                    watt: fixture.wattage || prev.watt,
-                                                    weight: fixture.weight || prev.weight,
-                                                    dmxFootprint: footprint || prev.dmxFootprint,
-                                                }));
-                                                setShowFixturePopulate(false);
-                                            }}
-                                            className={`w-full p-3 text-left rounded-lg border transition-colors ${formData.fixtureTypeId === fixture.fixtureTypeId
-                                                ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]'
-                                                : 'bg-[var(--bg-panel)] border-[var(--border-subtle)] hover:border-[var(--text-tertiary)]'
-                                                }`}
-                                        >
-                                            <div className="font-medium text-[var(--text-primary)]">{fixture.name}</div>
-                                            <div className="text-xs text-[var(--text-secondary)]">{fixture.manufacturer}</div>
-                                            <div className="flex gap-4 mt-1 text-xs font-mono">
-                                                {fixture.wattage > 0 && (
-                                                    <span className="text-[var(--accent-primary)]">{fixture.wattage}W</span>
-                                                )}
-                                                {footprint > 0 && (
-                                                    <span className="text-[var(--text-tertiary)]">{footprint}ch DMX</span>
-                                                )}
-                                            </div>
-                                        </button>
-                                    )
-                                })}
-                                {fixtureLibrary.length === 0 && (
-                                    <div className="text-center py-8 text-[var(--text-tertiary)]">
-                                        <p>No fixtures in library.</p>
-                                        <p className="text-xs mt-2">Import GDTF files from the Fixture Library page.</p>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowFixturePopulate(false)}
                                     className="w-full py-2 text-sm text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
                                 >
                                     Cancel

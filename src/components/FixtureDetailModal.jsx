@@ -13,8 +13,14 @@ export function FixtureDetailModal({ fixture, onClose }) {
     ];
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+        <div 
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={onClose}
+        >
+            <div 
+                className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+                onClick={e => e.stopPropagation()}
+            >
                 {/* Header */}
                 <div className="p-6 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)] flex items-start gap-6">
                     {fixture.thumbnailBlob ? (
@@ -117,22 +123,16 @@ export function FixtureDetailModal({ fixture, onClose }) {
                                                     <tr key={idx} className="border-b border-[var(--border-subtle)] hover:bg-white/5 transition-colors group">
                                                         <td className="px-4 py-3 font-mono text-[var(--accent-primary)] font-bold">
                                                             {ch.index}
-                                                            {ch.allOffsets?.length > 1 && (
-                                                                <div className="text-[9px] text-[var(--text-tertiary)] leading-none mt-1">
-                                                                    +{ch.allOffsets.length - 1} address
-                                                                </div>
-                                                            )}
                                                         </td>
                                                         <td className="px-4 py-3">
                                                             <div className="flex flex-col gap-1">
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="text-[var(--text-primary)] font-bold">{ch.attribute}</span>
-                                                                    <span className="text-[9px] text-[var(--text-tertiary)] uppercase">{ch.geometryType}</span>
+                                                                    <span className="text-[var(--text-primary)] font-bold">{ch.prettyAttribute || ch.attribute}</span>
                                                                 </div>
                                                                 {ch.splitChannels?.map((split, sIdx) => (
                                                                     <div key={sIdx} className="flex items-center gap-2 text-[var(--text-secondary)]">
                                                                         <span className="text-[10px] opacity-50 font-mono">/</span>
-                                                                        <span className="text-[11px] font-medium italic">{split.attribute}</span>
+                                                                        <span className="text-[11px] font-medium italic">{split.prettyAttribute || split.attribute}</span>
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -151,7 +151,7 @@ export function FixtureDetailModal({ fixture, onClose }) {
                                                                 {/* Show primary functions */}
                                                                 {ch.functions?.slice(0, 3).map((f, fIdx) => (
                                                                     <span key={fIdx} className="text-[9px] bg-[var(--bg-app)] px-1.5 py-0.5 rounded border border-[var(--border-subtle)] text-[var(--text-secondary)]" title={`${f.attr}: ${f.from}-${f.to}`}>
-                                                                        {f.name || f.attr}
+                                                                        {f.name || f.prettyAttr || f.attr}
                                                                     </span>
                                                                 ))}
                                                                 {/* Show split functions if any */}

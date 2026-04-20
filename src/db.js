@@ -5,8 +5,8 @@ export const db = new Dexie('LightingDB');
 
 // Bump version to add fixtureLibrary for GDTF support
 // Bump version to add table for Notes
-db.version(14).stores({
-    instruments: '++id, channel, [channel+part], address, position, type, purpose, watt, color, part, unit, gobo, accessory, proportion, curve, notes, fixtureTypeId, text1, text2, text3, text4, text5, text6, text7, text8, text9, text10',
+db.version(15).stores({
+    instruments: '++id, channel, [channel+part], address, position, type, purpose, watt, color, part, unit, gobo, accessory, proportion, curve, notes, fixtureTypeId, dmxMode, text1, text2, text3, text4, text5, text6, text7, text8, text9, text10',
     showMetadata: '++id, name',
     eosTargets: '++id, targetType, targetId, label, channels',
     fixtureLibrary: '++id, fixtureTypeId, name, manufacturer, shortName',
@@ -598,9 +598,8 @@ export const importMvr = async (arrayBuffer, merge = false) => {
         }
 
         // ── Step 1: Extract & import bundled GDTF files ──────────────────────
-        // Build a map of gdtf filename → { fixtureTypeId, wattage } for later linking.
-        // MVR archives store GDTF files at the root level (e.g. "ETC@Source4_50deg.gdtf").
-        const gdtfMap = {}; // filename → { fixtureTypeId, wattage }
+        // Build a map of gdtf filename → { fixtureTypeId, wattage, dmxModes } for later linking.
+        const gdtfMap = {};
 
         const gdtfEntries = Object.keys(zip.files).filter(name =>
             name.toLowerCase().endsWith('.gdtf') && !zip.files[name].dir
@@ -613,16 +612,15 @@ export const importMvr = async (arrayBuffer, merge = false) => {
                 const fixtureData = await parseGdtfFile(gdtfArrayBuffer);
                 await importGdtfToLibrary(db, fixtureData);
 
-                // Index by base filename and full path to ensure flexible matching
                 const baseName = gdtfPath.split('/').pop();
                 const info = {
                     fixtureTypeId: fixtureData.fixtureTypeId,
-                    wattage: fixtureData.wattage || 0
+                    wattage: fixtureData.wattage || 0,
+                    dmxModes: fixtureData.dmxModes || []
                 };
                 
                 gdtfMap[gdtfPath] = info;
                 gdtfMap[baseName] = info;
-                // Also index without the .gdtf extension to handle partial matches
                 gdtfMap[baseName.replace(/\.gdtf$/i, '')] = info;
                 console.log(`[MVR] Imported GDTF: ${baseName} (${fixtureData.name})`);
             } catch (gdtfErr) {
@@ -632,10 +630,6 @@ export const importMvr = async (arrayBuffer, merge = false) => {
 
         // ── Step 2: Build position & instrument data from the scene XML ───────
         const instruments = [];
-
-        // Map UUIDs to human-readable names.
-        // Positions can be in AUXData/Positions, UserData, or root level.
-        // We find all Position tags that have both uuid and name attributes.
         const positionMap = {};
         const allPositionDefs = xmlDoc.getElementsByTagName('Position');
         for (let i = 0; i < allPositionDefs.length; i++) {
@@ -645,10 +639,12 @@ export const importMvr = async (arrayBuffer, merge = false) => {
             if (uuid && name) positionMap[uuid] = name;
         }
 
-        /**
-         * Parse an MVR Address text into "Universe.Address" string.
-         * Can be absolute integer (e.g. "829") or already "Universe.Address" (e.g. "2.317").
-         */
+        const parseWattageFromName = (name) => {
+            if (!name) return 0;
+            const match = name.match(/(\d+)\s*[Ww](?!\w)/);
+            return match ? parseInt(match[1]) : 0;
+        };
+
         const parseAddress = (addrText) => {
             if (!addrText) return '';
             const trimmed = addrText.trim();
@@ -660,7 +656,6 @@ export const importMvr = async (arrayBuffer, merge = false) => {
             return `${universe}.${address}`;
         };
 
-        // Robust helper to find a direct child by tag name (ignoring namespaces)
         const getXMLChild = (parent, tagName) => {
             if (!parent || !parent.childNodes) return null;
             const children = parent.childNodes;
@@ -673,19 +668,14 @@ export const importMvr = async (arrayBuffer, merge = false) => {
             return null;
         };
 
-        // Recurse through Layers and Fixtures to maintain Layer context (Position fallback)
         const layers = xmlDoc.getElementsByTagName('Layer');
-        console.log(`[MVR] Found ${layers.length} Layers in document`);
-        
         const processedUuids = new Set();
 
         const processFixtures = (parentNode, fallbackPosition) => {
-            // More robust traversal using childNodes instead of .children
             const fixtureNodes = [];
             const children = parentNode.childNodes;
             for (let i = 0; i < children.length; i++) {
                 const node = children[i];
-                // Check both nodeName and localName to handle namespaces if present
                 if (node.nodeType === 1 && (node.nodeName === 'Fixture' || node.localName === 'Fixture')) {
                     fixtureNodes.push(node);
                 }
@@ -697,12 +687,8 @@ export const importMvr = async (arrayBuffer, merge = false) => {
                     if (uuid && processedUuids.has(uuid)) continue;
                     if (uuid) processedUuids.add(uuid);
 
-                    // Fixture name attribute = instrument model/type (e.g. "ETC Source 4 50°")
                     const fixtureName = child.getAttribute('name') || '';
 
-                    // Resolve Position: 
-                    // 1. Check child <Position> element for UUID link
-                    // 2. Fall back to Layer name (for tools that use layers as positions)
                     let positionVal = '';
                     const positionEl = getXMLChild(child, 'Position');
                     if (positionEl) {
@@ -710,13 +696,11 @@ export const importMvr = async (arrayBuffer, merge = false) => {
                         positionVal = positionMap[posUuid] || posUuid;
                     }
                     
-                    // If we still have a UUID (random string) or nothing, try fallback to Layer name
                     const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                     if (!positionVal || uuidPattern.test(positionVal)) {
                         positionVal = fallbackPosition || positionVal;
                     }
 
-                    // Resolve Address
                     let addressVal = '';
                     const addressesEl = getXMLChild(child, 'Addresses');
                     if (addressesEl) {
@@ -732,10 +716,6 @@ export const importMvr = async (arrayBuffer, merge = false) => {
                     const customIdEl = getXMLChild(child, 'CustomId');
                     const customIdTypeEl = getXMLChild(child, 'CustomIdType');
 
-                    // Channel resolution priority (per github.com/mvrdevelopment/spec):
-                    //   FixtureIDNumeric = Integer channel for programming (preferred)
-                    //   FixtureID        = String label — parse as int if possible
-                    //   CustomId + CustomIdType=2 = Channel-type custom identifier
                     const fixtureIdNumeric = fixtureIdNumericEl ? parseInt(fixtureIdNumericEl.textContent.trim(), 10) : NaN;
                     const fixtureIdStr = fixtureIdEl ? fixtureIdEl.textContent.trim() : '';
                     const fixtureIdAsNum = parseInt(fixtureIdStr, 10);
@@ -743,22 +723,12 @@ export const importMvr = async (arrayBuffer, merge = false) => {
                     const customIdNum = (customIdEl && customIdType === '2') ? parseInt(customIdEl.textContent.trim(), 10) : NaN;
 
                     let channelVal;
-                    if (!isNaN(fixtureIdNumeric)) {
-                        channelVal = fixtureIdNumeric;
-                    } else if (!isNaN(fixtureIdAsNum)) {
-                        channelVal = fixtureIdAsNum;
-                    } else if (!isNaN(customIdNum)) {
-                        channelVal = customIdNum;
-                    } else if (fixtureIdStr) {
-                        channelVal = fixtureIdStr;
-                    } else {
-                        console.log(`[MVR] Skipping fixture "${fixtureName}" — no channel identifier found`);
-                        continue;
-                    }
+                    if (!isNaN(fixtureIdNumeric)) channelVal = fixtureIdNumeric;
+                    else if (!isNaN(fixtureIdAsNum)) channelVal = fixtureIdAsNum;
+                    else if (!isNaN(customIdNum)) channelVal = customIdNum;
+                    else if (fixtureIdStr) channelVal = fixtureIdStr;
+                    else continue;
 
-                    // Type: fixture name attr is most human-readable (e.g. Vectorworks = "ETC Source 4 50°").
-                    // Fall back to GDTFSpec model portion for tools that omit the name attr.
-                    // GDTFSpec format: "Manufacturer@Model.gdtf" — strip prefix and extension.
                     const gdtfSpec = gdtfSpecEl ? gdtfSpecEl.textContent.trim() : '';
                     let typeVal = fixtureName;
                     if (!typeVal && gdtfSpec) {
@@ -766,19 +736,12 @@ export const importMvr = async (arrayBuffer, merge = false) => {
                         typeVal = model.replace(/\.gdtf$/i, '').replace(/_/g, ' ');
                     }
 
-                    // ── Link instrument to GDTF profile ─────────────────────────────
                     let fixtureTypeId = '';
                     let watt = '';
-                    let dmxFootprint = 1; // Default to 1
+                    let dmxFootprint = 1;
                     
                     if (gdtfSpec) {
-                        const gdtfBaseName = gdtfSpec.split('/').pop(); // strip any path prefix
-                        
-                        // Try matching in order of specificity:
-                        // 1. Exact match on spec (full path or exact filename)
-                        // 2. Base filename match
-                        // 3. Base name without extension
-                        // 4. Model-only match (strip Manufacturer@ prefix)
+                        const gdtfBaseName = gdtfSpec.split('/').pop();
                         let gdtfInfo = gdtfMap[gdtfSpec] || gdtfMap[gdtfBaseName] || gdtfMap[gdtfBaseName.replace(/\.gdtf$/i, '')];
                         
                         if (!gdtfInfo && gdtfBaseName.includes('@')) {
@@ -788,10 +751,27 @@ export const importMvr = async (arrayBuffer, merge = false) => {
 
                         if (gdtfInfo) {
                             fixtureTypeId = gdtfInfo.fixtureTypeId;
-                            if (gdtfInfo.wattage > 0) watt = gdtfInfo.wattage;
-                            // Set footprint from first DMX mode if available
-                            if (gdtfInfo.dmxModes?.[0]?.footprint > 0) {
-                                dmxFootprint = gdtfInfo.dmxModes[0].footprint;
+                            // Priority: MVR Name > GDTF Wattage > GDTF Name
+                            const mvrWattage = parseWattageFromName(fixtureName);
+                            if (mvrWattage > 0) {
+                                watt = mvrWattage;
+                            } else if (gdtfInfo.wattage > 0) {
+                                watt = gdtfInfo.wattage;
+                            }
+                            
+                            const gdtfModeEl = getXMLChild(child, 'GDTFMode');
+                            const gdtfModeName = gdtfModeEl ? gdtfModeEl.textContent.trim() : '';
+                            
+                            let selectedMode = null;
+                            if (gdtfModeName) {
+                                selectedMode = gdtfInfo.dmxModes.find(m => m.name === gdtfModeName);
+                            }
+                            if (!selectedMode && gdtfInfo.dmxModes.length > 0) {
+                                selectedMode = gdtfInfo.dmxModes.find(m => m.footprint > 0) || gdtfInfo.dmxModes[0];
+                            }
+
+                            if (selectedMode) {
+                                dmxFootprint = selectedMode.footprint || 1;
                             }
                         }
                     }
@@ -894,3 +874,6 @@ export const removeDuplicates = async () => {
         return duplicates.length;
     });
 };
+
+
+// Fixture library seeding is now disabled to prevent cluttering with blank data.

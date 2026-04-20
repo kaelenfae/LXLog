@@ -41,6 +41,49 @@ const findElDeep = (parent, tagName) => {
     return null;
 };
 
+const parseWattageFromName = (name) => {
+    if (!name) return 0;
+    // Look for patterns like "750W", "750 W", "750w"
+    const match = name.match(/(\d+)\s*[Ww](?!\w)/);
+    return match ? parseInt(match[1]) : 0;
+};
+
+function gdtfColorToCss(colorStr) {
+    if (!colorStr) return null;
+    const parts = colorStr.split(',').map(p => parseFloat(p.trim()));
+    if (parts.length !== 3) return null;
+
+    // Check if it looks like RGB (0-255) - Vectorworks often does this
+    if (parts.some(p => p > 1.01 && p <= 255)) {
+        return `rgb(${Math.round(parts[0])}, ${Math.round(parts[1])}, ${Math.round(parts[2])})`;
+    }
+
+    // Treat as CIE xyY (GDTF Spec)
+    const [x, y, Y] = parts;
+    if (y === 0) return Y > 0 ? '#ffffff' : '#000000';
+    
+    // Convert to XYZ
+    const X = (x * Y) / y;
+    const Z = ((1 - x - y) * Y) / y;
+    
+    // XYZ to sRGB (D65)
+    let r = X *  3.2406 + Y * -1.5372 + Z * -0.4986;
+    let g = X * -0.9689 + Y *  1.8758 + Z *  0.0415;
+    let b = X *  0.0557 + Y * -0.2040 + Z *  1.0570;
+
+    // Scaling (Y is 0-100)
+    r /= 100; g /= 100; b /= 100;
+
+    // Gamma correction
+    const f = (c) => c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1/2.4) - 0.055;
+    
+    r = Math.max(0, Math.min(1, f(r)));
+    g = Math.max(0, Math.min(1, f(g)));
+    b = Math.max(0, Math.min(1, f(b)));
+
+    return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
+}
+
 export async function parseGdtfFile(gdtfFile) {
     try {
         const zip = new JSZip();
@@ -58,18 +101,79 @@ export async function parseGdtfFile(gdtfFile) {
         if (!fixtureType) throw new Error('Invalid GDTF: missing FixtureType node');
 
         const fixtureData = {
-            id: fixtureType.getAttribute('FixtureTypeID') || root.getAttribute('FixtureTypeID') || '',
-            name: fixtureType.getAttribute('Name') || '',
+            fixtureTypeId: fixtureType.getAttribute('FixtureTypeID') || crypto.randomUUID(),
+            name: fixtureType.getAttribute('Name') || 'Unknown Fixture',
             shortName: fixtureType.getAttribute('ShortName') || '',
-            manufacturer: fixtureType.getAttribute('Manufacturer') || '',
+            manufacturer: fixtureType.getAttribute('Manufacturer') || 'Unknown',
             description: fixtureType.getAttribute('Description') || '',
-            thumbnail: fixtureType.getAttribute('Thumbnail') || '',
-            wattage: 0,
-            weight: 0,
+            wattage: parseFloat(fixtureType.getAttribute('Wattage')) || 0,
+            weight: parseFloat(fixtureType.getAttribute('Weight')) || 0,
             dmxModes: [],
             wheels: [],
-            rawXml: xmlString
+            geometryMap: {},
+            footprint: 0,
+            rawXml: xmlString // Store raw XML for source viewing
         };
+
+        // Fallback: Parse wattage from name if missing
+        if (fixtureData.wattage === 0) {
+            fixtureData.wattage = parseWattageFromName(fixtureData.name) || parseWattageFromName(fixtureData.shortName);
+        }
+
+        // Fallback for Wattage/Weight if they are in PhysicalDescriptions or Beam nodes
+        if (fixtureData.wattage === 0 || fixtureData.weight === 0) {
+            const physical = findElDeep(fixtureType, 'PhysicalDescriptions');
+            if (physical) {
+                // Some GDTFs put these in properties
+                getEls(physical, 'Properties').forEach(props => {
+                    getEls(props, 'Property').forEach(prop => {
+                        const pName = prop.getAttribute('Name');
+                        if (pName === 'Wattage' && fixtureData.wattage === 0) fixtureData.wattage = parseFloat(prop.getAttribute('Value')) || 0;
+                        if (pName === 'Weight' && fixtureData.weight === 0) fixtureData.weight = parseFloat(prop.getAttribute('Value')) || 0;
+                    });
+                });
+            }
+
+            // Still 0 or generic 1000? Check Beam nodes for PowerConsumption
+            if (fixtureData.wattage === 0 || fixtureData.wattage === 1000) {
+                const geometries = findElDeep(fixtureType, 'Geometries');
+                if (geometries) {
+                    let beamWattage = 0;
+                    const findBeams = (parent) => {
+                        getEls(parent, 'Beam').forEach(beam => {
+                            const power = parseFloat(beam.getAttribute('PowerConsumption'));
+                            if (power > beamWattage) beamWattage = power;
+                        });
+                        getEls(parent, '*').forEach(child => findBeams(child));
+                    };
+                    findBeams(geometries);
+                    
+                    // Only use Beam wattage if we haven't found a better one via name parsing
+                    // or if the name parsing also gave us 0.
+                    if (fixtureData.wattage === 0 || (fixtureData.wattage === 1000 && beamWattage > 0 && beamWattage !== 1000)) {
+                        fixtureData.wattage = beamWattage;
+                    }
+                }
+            }
+        }
+
+        // 0. Map Attribute Definitions (for pretty names)
+        const attrMap = {};
+        const attrContainer = findElDeep(fixtureType, 'AttributeDefinitions');
+        if (attrContainer) {
+            const attributes = findElDeep(attrContainer, 'Attributes');
+            if (attributes) {
+                getEls(attributes, 'Attribute').forEach(node => {
+                    const name = node.getAttribute('Name');
+                    if (name) {
+                        attrMap[name] = {
+                            pretty: node.getAttribute('Pretty') || name,
+                            group: node.getAttribute('ActivationGroup') || ''
+                        };
+                    }
+                });
+            }
+        }
 
         // 1. Map Geometries
         const geometryMap = {};
@@ -131,35 +235,40 @@ export async function parseGdtfFile(gdtfFile) {
                         .map(cf => ({
                             name: cf.getAttribute('Name'),
                             attr: cf.getAttribute('Attribute'),
+                            prettyAttr: attrMap[cf.getAttribute('Attribute')]?.pretty || cf.getAttribute('Attribute'),
                             from: cf.getAttribute('DMXFrom') || '0',
                             to: cf.getAttribute('DMXTo') || '0'
                         }));
 
-                    // We store data based on the Coarse (first) offset
-                    const primaryAddr = offsets[0];
-                    if (!resolvedAddresses.has(primaryAddr)) {
-                        resolvedAddresses.set(primaryAddr, {
-                            index: primaryAddr,
-                            attribute: primaryAttr,
-                            geometry: geometryName,
-                            resolution: offsets.length > 1 ? (offsets.length === 2 ? '16bit' : '24bit') : '8bit',
-                            allOffsets: offsets,
-                            splitChannels: [], // For storing other logical channels sharing this address
-                            functions: channelFunctions
-                        });
-                    } else {
-                        // This is a split channel! Add to the existing address entry
-                        const entry = resolvedAddresses.get(primaryAddr);
-                        entry.splitChannels.push({
-                            attribute: primaryAttr,
-                            functions: channelFunctions
-                        });
-                    }
+                    // We 'unroll' multi-byte channels so each address gets its own row
+                    offsets.forEach((offset, i) => {
+                        const suffix = i === 1 ? ' Fine' : (i === 2 ? ' Ultra' : '');
+                        
+                        if (!resolvedAddresses.has(offset)) {
+                            resolvedAddresses.set(offset, {
+                                index: offset,
+                                attribute: primaryAttr,
+                                prettyAttribute: (attrMap[primaryAttr]?.pretty || primaryAttr) + suffix,
+                                geometry: geometryName,
+                                geometryType: geometryMap[geometryName]?.type || 'Geometry',
+                                resolution: offsets.length > 1 ? (offsets.length === 2 ? '16bit' : '24bit') : '8bit',
+                                allOffsets: offsets,
+                                splitChannels: [], 
+                                functions: channelFunctions
+                            });
+                        }
+                    });
                 });
             });
 
-            // Flatten the map and sort by address
+            // Convert map to array and sort by address
             mode.channels = Array.from(resolvedAddresses.values()).sort((a, b) => a.index - b.index);
+
+            // GDTF Spec Check: If footprint is 0 but we have channels, 
+            // the footprint is at least the highest address used.
+            if (mode.footprint === 0 && mode.channels.length > 0) {
+                mode.footprint = Math.max(...mode.channels.map(c => Math.max(...c.allOffsets)));
+            }
 
             // Only push modes that have a footprint
             if (mode.footprint > 0) {
@@ -167,7 +276,41 @@ export async function parseGdtfFile(gdtfFile) {
             }
         });
 
-        // 3. Handle Assets (Thumbnail, Wheels) as before but with cleaned loop
+        // 3. Parse Wheels (Gobo/Color Slots)
+        const wheelsContainer = getEl(fixtureType, 'Wheels');
+        if (wheelsContainer) {
+            const wheels = getEls(wheelsContainer, 'Wheel');
+            for (const wNode of wheels) {
+                const wheel = {
+                    name: wNode.getAttribute('Name') || 'Unnamed Wheel',
+                    slots: []
+                };
+                const slots = getEls(wNode, 'Slot');
+                for (const sNode of slots) {
+                    const colorRaw = sNode.getAttribute('Color');
+                    const slot = {
+                        name: sNode.getAttribute('Name') || sNode.getAttribute('MediaFileName') || `Slot ${fixtureData.wheels.length + 1}`,
+                        color: colorRaw,
+                        cssColor: gdtfColorToCss(colorRaw),
+                        png: sNode.getAttribute('MediaFileName') || sNode.getAttribute('PNG') || null,
+                        imageData: null
+                    };
+                    
+                    // Load PNG as base64 for DB storage
+                    if (slot.png) {
+                        const pngFile = contents.file(slot.png) || contents.file(`wheels/${slot.png}`) || contents.file(`png/${slot.png}`);
+                        if (pngFile) {
+                            const base64 = await pngFile.async('base64');
+                            slot.imageData = `data:image/png;base64,${base64}`;
+                        }
+                    }
+                    wheel.slots.push(slot);
+                }
+                fixtureData.wheels.push(wheel);
+            }
+        }
+
+        // 4. Handle Assets (Thumbnail)
         if (fixtureData.thumbnail) {
             const thumbFile = contents.file(fixtureData.thumbnail) || contents.file(`thumbnails/${fixtureData.thumbnail}`);
             if (thumbFile) fixtureData.thumbnailBlob = await thumbFile.async('blob');

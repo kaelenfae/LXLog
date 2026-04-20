@@ -3,6 +3,16 @@ import { useNavigate } from 'react-router-dom';
 
 const PATCH_NOTES = [
     {
+        version: "0.4.6",
+        date: "2026-04-19",
+        title: "GDTF & Multi Select Fixes",
+        changes: [
+            "Fixture Library Re-enabled – GDTF imports engine reworked.",
+            "Multiselect Improvements – Can click and drag for multiple rows, Doubleclick to edit on the table, and other QOL changes.",
+            "New Export Menu – Can export instrument data to Eos Patch, Lightwright Import (Untested) or Everything into a CSV."
+        ]
+    },
+    {
         version: "0.4.5",
         date: "2026-04-12",
         title: "Stability & Community",
