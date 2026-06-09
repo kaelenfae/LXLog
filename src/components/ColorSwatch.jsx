@@ -8,7 +8,7 @@ export function ColorSwatch({ color, className = "w-6 h-6", rounded = "rounded-f
 
     // Identify separators and colors
     // Supports: R11/R21, R11+R21, R11,R21, R11;R21
-    const separators = /[\/+,;]/;
+    const separators = /[/+,;]/;
     const parts = color.split(separators).map(p => p.trim()).filter(Boolean);
 
     if (parts.length > 1) {

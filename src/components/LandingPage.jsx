@@ -1,10 +1,8 @@
 import React from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { version } from '../../package.json';
 
 export function LandingPage() {
-    const navigate = useNavigate();
-
     return (
         <div className="min-h-screen bg-[#0f0f13] text-white flex flex-col font-sans selection:bg-indigo-500/30">
             {/* Ambient Background Effects */}
@@ -16,7 +14,7 @@ export function LandingPage() {
             {/* Navigation */}
             <nav className="relative z-10 flex items-center justify-between px-6 py-6 max-w-7xl mx-auto w-full">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20 text-xl">L</div>
+                    <img src="/lxlog_logo_final.png" alt="LXLog Logo" className="w-10 h-10 rounded-xl shadow-lg shadow-indigo-500/20" />
                     <span className="font-bold text-2xl tracking-tight">LX<span className="text-gray-400 font-normal">Log</span></span>
                 </div>
                 <div className="flex gap-6 items-center">

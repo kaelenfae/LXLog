@@ -7,6 +7,45 @@ import { useShowInfo } from '../hooks/useShowInfo';
 import { PDFDownloadButton } from './PDFDownloadButton';
 import { OrientationSelect } from './OrientationSelect';
 
+const TargetCard = ({ target, color }) => (
+    <div
+        className="p-3 rounded-lg border-2 flex flex-col items-center justify-center text-center min-w-[5rem] bg-white"
+        style={{ borderColor: color }}
+    >
+        <div className="text-xl font-bold text-gray-800">{target.targetId}</div>
+        {target.label && (
+            <div className="text-xs text-gray-600 mt-1 truncate max-w-[8rem]" title={target.label}>
+                {target.label}
+            </div>
+        )}
+        {target.channels && (
+            <div className="text-[10px] text-gray-400 mt-1 truncate max-w-[8rem]" title={target.channels}>
+                {target.channels}
+            </div>
+        )}
+    </div>
+);
+
+const TargetSection = ({ title, items, color, bgColor }) => {
+    if (items.length === 0) return null;
+    return (
+        <div className="mb-8 print:break-inside-avoid">
+            <div
+                className="px-4 py-2 rounded-t-lg font-bold text-lg uppercase tracking-wide mb-3 flex items-center gap-3"
+                style={{ backgroundColor: bgColor, color: '#fff' }}
+            >
+                <span>{title}</span>
+                <span className="text-sm font-normal opacity-75">({items.length})</span>
+            </div>
+            <div className="flex flex-wrap gap-3">
+                {items.map((target, idx) => (
+                    <TargetCard key={`${target.targetType}-${target.targetId}-${idx}`} target={target} color={color} />
+                ))}
+            </div>
+        </div>
+    );
+};
+
 export function EosTargetsReport() {
     const [orientation, setOrientation] = React.useState('portrait');
     const [filter, setFilter] = React.useState('all'); // 'all', 'Group', 'Preset', 'Sub'
@@ -51,45 +90,6 @@ export function EosTargetsReport() {
     const showGroups = filter === 'all' || filter === 'Group';
     const showPresets = filter === 'all' || filter === 'Preset';
     const showSubs = filter === 'all' || filter === 'Sub';
-
-    const TargetCard = ({ target, color }) => (
-        <div
-            className="p-3 rounded-lg border-2 flex flex-col items-center justify-center text-center min-w-[5rem] bg-white"
-            style={{ borderColor: color }}
-        >
-            <div className="text-xl font-bold text-gray-800">{target.targetId}</div>
-            {target.label && (
-                <div className="text-xs text-gray-600 mt-1 truncate max-w-[8rem]" title={target.label}>
-                    {target.label}
-                </div>
-            )}
-            {target.channels && (
-                <div className="text-[10px] text-gray-400 mt-1 truncate max-w-[8rem]" title={target.channels}>
-                    {target.channels}
-                </div>
-            )}
-        </div>
-    );
-
-    const TargetSection = ({ title, items, color, bgColor }) => {
-        if (items.length === 0) return null;
-        return (
-            <div className="mb-8 print:break-inside-avoid">
-                <div
-                    className="px-4 py-2 rounded-t-lg font-bold text-lg uppercase tracking-wide mb-3 flex items-center gap-3"
-                    style={{ backgroundColor: bgColor, color: '#fff' }}
-                >
-                    <span>{title}</span>
-                    <span className="text-sm font-normal opacity-75">({items.length})</span>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                    {items.map((target, idx) => (
-                        <TargetCard key={`${target.targetType}-${target.targetId}-${idx}`} target={target} color={color} />
-                    ))}
-                </div>
-            </div>
-        );
-    };
 
     const controls = (
         <div className="flex gap-4 items-center flex-wrap bg-gray-100 p-2 rounded text-xs text-black border border-gray-300 print:hidden">

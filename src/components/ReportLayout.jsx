@@ -1,6 +1,8 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
+import { STORAGE_KEYS } from '../constants';
 
 export const ReportLayout = ({ title, children, controls, orientation = 'landscape', pdfButton }) => {
     const metadata = useLiveQuery(() => db.showMetadata.toArray());
@@ -36,7 +38,7 @@ export const ReportLayout = ({ title, children, controls, orientation = 'landsca
             <header className="flex justify-between items-end border-b-2 border-black pb-2 print:pb-1 mb-4 print:mb-2 shrink-0">
                 <div className="text-left w-1/3">
                     <div className="font-bold uppercase text-xs text-gray-500">Venue</div>
-                    <div className="text-sm font-semibold">{showInfo.venue}</div>
+                    <div className="text-sm font-semibold">{localStorage.getItem(STORAGE_KEYS.VENUE_NAME) || ''}</div>
                 </div>
                 <div className="text-center w-1/3">
                     <div className="text-xl font-bold uppercase tracking-widest leading-tight">{showInfo.name}</div>
@@ -70,4 +72,12 @@ export const ReportLayout = ({ title, children, controls, orientation = 'landsca
             </footer>
         </div>
     );
+};
+
+ReportLayout.propTypes = {
+    title: PropTypes.string.isRequired,
+    children: PropTypes.node.isRequired,
+    controls: PropTypes.node,
+    orientation: PropTypes.oneOf(['portrait', 'landscape']),
+    pdfButton: PropTypes.node,
 };

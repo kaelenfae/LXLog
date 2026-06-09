@@ -2,20 +2,21 @@ import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { InstrumentSchedule } from './InstrumentSchedule';
 import classNames from 'classnames';
+import { STORAGE_KEYS } from '../constants';
 
-export function MasterDetailLayout({ MasterComponent = InstrumentSchedule }) {
+export function MasterDetailLayout() {
     const location = useLocation();
     const isDetailView = location.pathname.includes('/instrument/');
 
     // Width State
     const [detailWidth, setDetailWidth] = React.useState(() => {
-        const saved = localStorage.getItem('detailPanelWidth');
+        const saved = localStorage.getItem(STORAGE_KEYS.DETAIL_PANEL_WIDTH);
         return saved ? parseInt(saved, 10) : 450;
     });
 
     // Keep track of the last non-zero width to restore to
     const [lastOpenWidth, setLastOpenWidth] = React.useState(() => {
-        const saved = localStorage.getItem('detailPanelLastWidth');
+        const saved = localStorage.getItem(STORAGE_KEYS.DETAIL_PANEL_LAST_WIDTH);
         return saved ? parseInt(saved, 10) : 450;
     });
 
@@ -41,12 +42,12 @@ export function MasterDetailLayout({ MasterComponent = InstrumentSchedule }) {
             // Snap to closed if small
             if (newWidth < 150) {
                 setDetailWidth(0); // Collapsed
-                localStorage.setItem('detailPanelWidth', 0);
+                localStorage.setItem(STORAGE_KEYS.DETAIL_PANEL_WIDTH, 0);
             } else if (newWidth <= maxWidth) {
                 setDetailWidth(newWidth);
                 setLastOpenWidth(newWidth); // Update last active width
-                localStorage.setItem('detailPanelWidth', newWidth);
-                localStorage.setItem('detailPanelLastWidth', newWidth);
+                localStorage.setItem(STORAGE_KEYS.DETAIL_PANEL_WIDTH, newWidth);
+                localStorage.setItem(STORAGE_KEYS.DETAIL_PANEL_LAST_WIDTH, newWidth);
             }
         }
     }, [isResizing]);
@@ -56,11 +57,11 @@ export function MasterDetailLayout({ MasterComponent = InstrumentSchedule }) {
             // Restore
             const widthToRestore = lastOpenWidth < 300 ? 450 : lastOpenWidth;
             setDetailWidth(widthToRestore);
-            localStorage.setItem('detailPanelWidth', widthToRestore);
+            localStorage.setItem(STORAGE_KEYS.DETAIL_PANEL_WIDTH, widthToRestore);
         } else {
             // Collapse
             setDetailWidth(0);
-            localStorage.setItem('detailPanelWidth', 0);
+            localStorage.setItem(STORAGE_KEYS.DETAIL_PANEL_WIDTH, 0);
         }
     };
 
@@ -88,7 +89,7 @@ export function MasterDetailLayout({ MasterComponent = InstrumentSchedule }) {
                     minHeight: 0
                 }}
             >
-                <MasterComponent
+                <InstrumentSchedule
                     isMasterView={true}
                     isCollapsed={isCollapsed}
                     onToggleDetail={toggleCollapse}

@@ -4,6 +4,7 @@ import { db } from '../db';
 import { ReportLayout } from './ReportLayout';
 import { useSettings } from '../hooks/useSettings';
 import { formatAddress } from '../utils/addressFormatter';
+import { formatChannelDisplay } from '../utils/channelUtils';
 import { PatchPDF } from './PatchPDF';
 import { useShowInfo } from '../hooks/useShowInfo';
 import { PDFDownloadButton } from './PDFDownloadButton';
@@ -75,11 +76,7 @@ export function PatchReport() {
             const inst = { ...item };
 
             if (inst.channel === lastChannel && inst.part) {
-                // Use the same channelDisplayMode logic as ChannelHookupReport
-                if (channelDisplayMode === 'parts') inst.displayChannel = `P${inst.part}`;
-                else if (channelDisplayMode === 'dots') inst.displayChannel = `.${inst.part}`;
-                else if (channelDisplayMode === 'hide') inst.displayChannel = '';
-                else inst.displayChannel = inst.channel; // Show Dups
+                inst.displayChannel = formatChannelDisplay(inst.channel, inst.part, channelDisplayMode, true);
             } else {
                 inst.displayChannel = inst.channel;
                 lastChannel = inst.channel;

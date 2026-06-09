@@ -1,7 +1,117 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db';
+import { parseGdtfFile } from '../utils/gdtfParser';
+import { useToast } from './Toast';
 
 export function FixtureDetailModal({ fixture, onClose }) {
     const [activeTab, setActiveTab] = useState('dmx');
+    const [targetFixtureId, setTargetFixtureId] = useState('');
+    const [loadingGdtf, setLoadingGdtf] = useState(false);
+    const fileInputRef = useRef(null);
+    const toast = useToast();
+
+    // Create a stable object URL for the thumbnail blob and revoke it on cleanup
+    const thumbnailUrl = useMemo(() => {
+        if (fixture?.thumbnailBlob) return URL.createObjectURL(fixture.thumbnailBlob);
+        return null;
+    }, [fixture?.thumbnailBlob]);
+
+    useEffect(() => {
+        return () => { if (thumbnailUrl) URL.revokeObjectURL(thumbnailUrl); };
+    }, [thumbnailUrl]);
+
+    const otherFixtures = useLiveQuery(async () => {
+        if (!fixture) return [];
+        const all = await db.fixtureLibrary.toArray();
+        return all.filter(f => f.id !== fixture.id);
+    }, [fixture]) || [];
+
+    const handleMerge = async () => {
+        if (!targetFixtureId || !fixture) return;
+        const target = otherFixtures.find(f => f.fixtureTypeId === targetFixtureId);
+        if (!target) return;
+        
+        try {
+            // Find all instruments using this fixture and update them, then delete this fixture
+            await db.transaction('rw', db.instruments, db.fixtureLibrary, async () => {
+                const insts = await db.instruments.where('fixtureTypeId').equals(fixture.fixtureTypeId).toArray();
+                for (const inst of insts) {
+                    await db.instruments.update(inst.id, { 
+                        fixtureTypeId: target.fixtureTypeId,
+                        type: target.name
+                    });
+                }
+                await db.fixtureLibrary.delete(fixture.id);
+            });
+            onClose();
+        } catch (err) {
+            console.error("Failed to merge fixtures:", err);
+            toast.error("Failed to merge fixtures.");
+        }
+    };
+
+    const handleLoadGdtfForFixture = async (file) => {
+        setLoadingGdtf(true);
+        try {
+            const fixtureData = await parseGdtfFile(file);
+            
+            await db.transaction('rw', db.instruments, db.fixtureLibrary, async () => {
+                const existing = await db.fixtureLibrary.where('fixtureTypeId').equals(fixtureData.fixtureTypeId).first();
+                
+                if (existing && existing.id !== fixture.id) {
+                    const insts = await db.instruments.where('fixtureTypeId').equals(fixture.fixtureTypeId).toArray();
+                    for (const inst of insts) {
+                        await db.instruments.update(inst.id, {
+                            fixtureTypeId: existing.fixtureTypeId,
+                            type: existing.name
+                        });
+                    }
+                    await db.fixtureLibrary.delete(fixture.id);
+                    toast.success(`Merged and linked instruments to existing library profile: ${existing.name}`);
+                } else {
+                    let cleanedModes = fixtureData.dmxModes || [];
+                    if (cleanedModes.length > 1) {
+                        cleanedModes = cleanedModes.filter(m => (m.name || '').toLowerCase() !== 'default');
+                    }
+
+                    const record = {
+                        fixtureTypeId: fixtureData.fixtureTypeId,
+                        name: fixtureData.name,
+                        shortName: fixtureData.shortName,
+                        manufacturer: fixtureData.manufacturer,
+                        description: fixtureData.description,
+                        wattage: fixtureData.wattage,
+                        weight: fixtureData.weight,
+                        dmxModes: cleanedModes,
+                        wheels: fixtureData.wheels,
+                        thumbnailBlob: fixtureData.thumbnailBlob || null,
+                        rawXml: fixtureData.rawXml,
+                        isGeneric: false,
+                        parserVersion: '3.0.0',
+                        importedAt: new Date().toISOString()
+                    };
+
+                    const insts = await db.instruments.where('fixtureTypeId').equals(fixture.fixtureTypeId).toArray();
+                    for (const inst of insts) {
+                        await db.instruments.update(inst.id, {
+                            fixtureTypeId: fixtureData.fixtureTypeId,
+                            type: fixtureData.name
+                        });
+                    }
+
+                    await db.fixtureLibrary.update(fixture.id, record);
+                    toast.success(`Successfully loaded GDTF profile: ${fixtureData.name}`);
+                }
+            });
+            onClose();
+        } catch (err) {
+            console.error('Failed to load GDTF for fixture:', err);
+            toast.error(err.message || 'Failed to load GDTF file');
+        } finally {
+            setLoadingGdtf(false);
+        }
+    };
 
     if (!fixture) return null;
 
@@ -158,7 +268,7 @@ export function FixtureDetailModal({ fixture, onClose }) {
                                                                 {ch.splitChannels?.map(split => 
                                                                     split.functions?.slice(0, 2).map((f, fIdx) => (
                                                                         <span key={`s-${fIdx}`} className="text-[9px] bg-[var(--bg-app)] px-1.5 py-0.5 rounded border border-amber-500/10 text-amber-500/60" title={`${f.attr}: ${f.from}-${f.to}`}>
-                                                                           {f.name || f.attr}
+                                                                           {f.name || f.prettyAttr || f.attr}
                                                                         </span>
                                                                     ))
                                                                 )}
@@ -280,10 +390,55 @@ export function FixtureDetailModal({ fixture, onClose }) {
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-panel)] flex justify-end">
+                <div className="px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-panel)] flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <span className="text-sm text-[var(--text-secondary)]">Merge into:</span>
+                        <select 
+                            value={targetFixtureId}
+                            onChange={(e) => setTargetFixtureId(e.target.value)}
+                            className="bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-lg text-sm px-3 py-1.5 focus:border-[var(--accent-primary)] outline-none max-w-[200px]"
+                        >
+                            <option value="">Select Target...</option>
+                            {otherFixtures.map(f => (
+                                <option key={f.id} value={f.fixtureTypeId}>{f.name} ({f.manufacturer})</option>
+                            ))}
+                        </select>
+                        <button
+                            onClick={handleMerge}
+                            disabled={!targetFixtureId}
+                            className="px-4 py-1.5 bg-[var(--accent-primary)] text-white text-sm font-bold rounded-lg hover:bg-[var(--accent-hover)] transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Merge
+                        </button>
+                        <div className="h-6 w-px bg-[var(--border-subtle)] mx-2"></div>
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={loadingGdtf}
+                            className="flex items-center gap-1.5 px-4 py-1.5 border border-[var(--border-default)] text-[var(--text-primary)] text-sm font-bold rounded-lg hover:bg-[var(--bg-hover)] transition-all shadow-lg active:scale-95 disabled:opacity-50"
+                        >
+                            {loadingGdtf ? (
+                                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                            )}
+                            Load GDTF
+                        </button>
+                        <input 
+                            type="file"
+                            ref={fileInputRef}
+                            accept=".gdtf"
+                            className="hidden"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleLoadGdtfForFixture(file);
+                            }}
+                        />
+                    </div>
                     <button
                         onClick={onClose}
-                        className="px-6 py-2 bg-[var(--accent-primary)] text-white font-bold rounded-lg hover:bg-[var(--accent-hover)] transition-all shadow-lg active:scale-95"
+                        className="px-6 py-2 bg-[var(--bg-hover)] text-[var(--text-primary)] font-bold rounded-lg hover:bg-[var(--border-subtle)] transition-all shadow-lg active:scale-95"
                     >
                         Close Details
                     </button>

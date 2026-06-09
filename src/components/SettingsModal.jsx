@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, resetShow, exportShow, removeDuplicates } from '../db';
+import { db, resetShow, removeDuplicates } from '../db';
 import classNames from 'classnames';
 import { useSettings } from '../hooks/useSettings';
-import { THEME_CLASSES } from '../constants';
+import { THEME_CLASSES, STORAGE_KEYS } from '../constants';
 import { useToast } from './Toast';
-import { version } from '../../package.json';
 
 // Theme presets with display colors for preview cards
 const THEME_PRESETS = [
@@ -32,6 +32,7 @@ const DEFAULT_CUSTOM_COLORS = {
 
 const SETTINGS_TABS = [
     { id: 'show', label: 'Show Info' },
+    { id: 'venue', label: 'Venue' },
     { id: 'reports', label: 'Report Settings' },
     { id: 'interface', label: 'Interface' },
     { id: 'theme', label: 'Theme' },
@@ -67,6 +68,14 @@ export function SettingsModal({ onClose }) {
     const [channelDisplayMode, setChannelDisplayMode] = useState(currentSettings.channelDisplayMode || 'parts');
     const [mobileRefresh, setMobileRefresh] = useState(currentSettings.mobileRefresh);
     const [showAllFixtureTypes, setShowAllFixtureTypes] = useState(currentSettings.showAllFixtureTypes);
+    const [showXYZ, setShowXYZ] = useState(currentSettings.showXYZ);
+    const [defaultGridHeight, setDefaultGridHeight] = useState(currentSettings.defaultGridHeight || '');
+    
+    // Venue Settings
+    const [venueName, setVenueName] = useState(currentSettings.venueName || '');
+    const [venueAddress, setVenueAddress] = useState(currentSettings.venueAddress || '');
+    const [venueNotes, setVenueNotes] = useState(currentSettings.venueNotes || '');
+    const [venueContact, setVenueContact] = useState(currentSettings.venueContact || '');
 
     // Accessibility Settings
     const [dyslexicMode, setDyslexicMode] = useState(currentSettings.dyslexicMode);
@@ -84,21 +93,37 @@ export function SettingsModal({ onClose }) {
     const [showMoreShowInfo, setShowMoreShowInfo] = useState(false);
 
     // Custom Fields state
-    const [customFieldDefs, setCustomFieldDefs] = useState([]);
+    const [customFieldDefs, setCustomFieldDefs] = useState(null);
 
-    const [updateStatus, setUpdateStatus] = useState(null);
-    const [appVersion, setAppVersion] = useState(version);
     const [cleanupMessage, setCleanupMessage] = useState(null);
     const [confirmPending, setConfirmPending] = useState(null); // null | 'reset' | 'duplicates' | 'magicSheet'
     const [originalTheme] = useState(currentSettings.theme); // Store original for cancel
+  const [isSaved, setIsSaved] = useState(false); // Track if settings were saved
     const [originalCustomColors] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('customTheme')) || DEFAULT_CUSTOM_COLORS; }
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.CUSTOM_THEME)) || DEFAULT_CUSTOM_COLORS; }
         catch { return DEFAULT_CUSTOM_COLORS; }
     });
 
+    const activeCustomFieldDefs = customFieldDefs ?? (metadata?.[0]?.customFieldDefinitions ?? []);
+    const displayFormData = { ...metadata?.[0], ...formData };
+
+    const getCustomShowFieldsArray = () => {
+        if (formData.customShowFieldsArray) {
+            return formData.customShowFieldsArray;
+        }
+        const dbCustomFields = metadata?.[0]?.customFields || {};
+        const arr = Object.entries(dbCustomFields).map(([key, val]) => ({
+            id: Math.random().toString(),
+            label: key,
+            value: val
+        }));
+        return arr;
+    };
+    const customShowFieldsArray = getCustomShowFieldsArray();
+
     // Custom Theme Colors
     const [customThemeColors, setCustomThemeColors] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('customTheme')) || DEFAULT_CUSTOM_COLORS; }
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.CUSTOM_THEME)) || DEFAULT_CUSTOM_COLORS; }
         catch { return DEFAULT_CUSTOM_COLORS; }
     });
 
@@ -129,7 +154,7 @@ export function SettingsModal({ onClose }) {
             document.documentElement.style.setProperty('--accent-text', '#ffffff');
             document.documentElement.style.setProperty('--bg-hover', customThemeColors['--bg-card']);
             document.documentElement.style.setProperty('--border-subtle', customThemeColors['--bg-card']);
-            document.documentElement.style.setProperty('--border-default', customThemeColors['--text-secondary'] + '44');
+            document.documentElement.style.setProperty('--border-default', `color-mix(in srgb, ${customThemeColors['--text-secondary']} 27%, transparent)`);
         } else if (theme !== 'dark') {
             document.documentElement.classList.add(theme);
         }
@@ -137,159 +162,155 @@ export function SettingsModal({ onClose }) {
 
     // Restore original theme if modal is closed without saving
     const handleClose = () => {
-        document.documentElement.classList.remove(...THEME_CLASSES);
-        // Clear any custom CSS variables
-        Object.keys(DEFAULT_CUSTOM_COLORS).forEach(key => {
+        if (!isSaved) {
+          document.documentElement.classList.remove(...THEME_CLASSES);
+          // Clear any custom CSS variables
+          Object.keys(DEFAULT_CUSTOM_COLORS).forEach(key => {
             document.documentElement.style.removeProperty(key);
-        });
-        document.documentElement.style.removeProperty('--accent-hover');
-        document.documentElement.style.removeProperty('--accent-text');
-        document.documentElement.style.removeProperty('--bg-hover');
-        document.documentElement.style.removeProperty('--border-subtle');
-        document.documentElement.style.removeProperty('--border-default');
+          });
+          document.documentElement.style.removeProperty('--accent-hover');
+          document.documentElement.style.removeProperty('--accent-text');
+          document.documentElement.style.removeProperty('--bg-hover');
+          document.documentElement.style.removeProperty('--border-subtle');
+          document.documentElement.style.removeProperty('--border-default');
 
-        if (originalTheme === 'custom') {
+          if (originalTheme === 'custom') {
             Object.entries(originalCustomColors).forEach(([key, value]) => {
-                document.documentElement.style.setProperty(key, value);
+              document.documentElement.style.setProperty(key, value);
             });
             document.documentElement.style.setProperty('--accent-hover', originalCustomColors['--accent-primary']);
             document.documentElement.style.setProperty('--accent-text', '#ffffff');
             document.documentElement.style.setProperty('--bg-hover', originalCustomColors['--bg-card']);
             document.documentElement.style.setProperty('--border-subtle', originalCustomColors['--bg-card']);
-            document.documentElement.style.setProperty('--border-default', originalCustomColors['--text-secondary'] + '44');
-        } else if (originalTheme !== 'dark') {
+            document.documentElement.style.setProperty('--border-default', `color-mix(in srgb, ${originalCustomColors['--text-secondary']} 27%, transparent)`);
+          } else if (originalTheme !== 'dark') {
             document.documentElement.classList.add(originalTheme);
+          }
         }
+        setIsSaved(false);
         onClose();
     };
 
-    useEffect(() => {
-        if (metadata && metadata[0]) {
-            setFormData(metadata[0]);
-            // Load custom field definitions
-            if (metadata[0].customFieldDefinitions) {
-                setCustomFieldDefs(metadata[0].customFieldDefinitions);
-            }
-        }
-    }, [metadata]);
-    useEffect(() => {
-        if (window.electron) {
-            const electronVer = window.electron.getVersion();
-            if (electronVer) setAppVersion(electronVer);
-
-
-            window.electron.onUpdateAvailable(() => setUpdateStatus('available'));
-            window.electron.onUpdateDownloaded(() => setUpdateStatus('downloaded'));
-            window.electron.onUpdateError(() => setUpdateStatus('error'));
-        }
-    }, []);
-
     const handleSave = async () => {
-        // Safe Merge: Default to existing metadata if formData is incomplete
-        const currentData = (metadata && metadata[0]) || {};
-        const dataToSave = { ...currentData, ...formData };
+        const dataToSave = { ...displayFormData };
 
-        if (!dataToSave.id && currentData.id) dataToSave.id = currentData.id;
+        if (!dataToSave.id && displayFormData.id) dataToSave.id = displayFormData.id;
 
-        await db.showMetadata.put(dataToSave);
+        // Ensure custom field definitions are also saved on the metadata object
+        dataToSave.customFieldDefinitions = activeCustomFieldDefs;
 
-        // Save custom field definitions
-        const metaToUpdate = await db.showMetadata.toArray();
-        if (metaToUpdate && metaToUpdate[0]) {
-            await db.showMetadata.update(metaToUpdate[0].id, {
-                customFieldDefinitions: customFieldDefs
-            });
+        // Remove venue from show metadata (since venue is a persistent global setting now)
+        delete dataToSave.venue;
+
+        // Save custom show info fields as a key-value object
+        const customFieldsObj = {};
+        const arr = formData.customShowFieldsArray || getCustomShowFieldsArray();
+        arr.forEach(item => {
+            if (item.label.trim()) {
+                customFieldsObj[item.label.trim()] = item.value;
+            }
+        });
+        dataToSave.customFields = customFieldsObj;
+        delete dataToSave.customShowFieldsArray;
+
+        try {
+            await db.showMetadata.put(dataToSave);
+        } catch (err) {
+            console.error("Failed to save show metadata:", err);
+            toast.error("Failed to save show info.");
         }
-
         // Save Interface Settings
-        localStorage.setItem('compactMode', isCompact);
-        localStorage.setItem('disableLanding', disableLanding);
-        localStorage.setItem('addressMode', addressMode);
-        localStorage.setItem('theme', theme);
-        localStorage.setItem('showUniverse1', showUniverse1);
-        localStorage.setItem('channelDisplayMode', channelDisplayMode);
+        localStorage.setItem(STORAGE_KEYS.COMPACT_MODE, isCompact);
+        localStorage.setItem(STORAGE_KEYS.DISABLE_LANDING, disableLanding);
+        localStorage.setItem(STORAGE_KEYS.ADDRESS_MODE, addressMode);
+        localStorage.setItem(STORAGE_KEYS.THEME, theme);
+        localStorage.setItem(STORAGE_KEYS.SHOW_UNIVERSE1, showUniverse1);
+        localStorage.setItem(STORAGE_KEYS.CHANNEL_DISPLAY_MODE, channelDisplayMode);
+        localStorage.setItem(STORAGE_KEYS.SHOW_XYZ, showXYZ);
+        localStorage.setItem(STORAGE_KEYS.DEFAULT_GRID_HEIGHT, defaultGridHeight);
+        localStorage.setItem(STORAGE_KEYS.VENUE_NAME, venueName);
+        localStorage.setItem(STORAGE_KEYS.VENUE_ADDRESS, venueAddress);
+        localStorage.setItem(STORAGE_KEYS.VENUE_NOTES, venueNotes);
+        localStorage.setItem(STORAGE_KEYS.VENUE_CONTACT, venueContact);
 
         // Accessibility Settings
-        localStorage.setItem('dyslexicMode', dyslexicMode);
-        localStorage.setItem('reducedMotion', reducedMotion);
-        localStorage.setItem('highContrast', highContrast);
-        localStorage.setItem('largeText', largeText);
+        localStorage.setItem(STORAGE_KEYS.DYSLEXIC_MODE, dyslexicMode);
+        localStorage.setItem(STORAGE_KEYS.REDUCED_MOTION, reducedMotion);
+        localStorage.setItem(STORAGE_KEYS.HIGH_CONTRAST, highContrast);
+        localStorage.setItem(STORAGE_KEYS.LARGE_TEXT, largeText);
 
         // Unit System
-        localStorage.setItem('unitSystem', unitSystem);
+        localStorage.setItem(STORAGE_KEYS.UNIT_SYSTEM, unitSystem);
 
         // Universe Separator
-        localStorage.setItem('universeSeparator', universeSeparator);
+        localStorage.setItem(STORAGE_KEYS.UNIVERSE_SEPARATOR, universeSeparator);
 
         // Custom Theme
         if (theme === 'custom') {
-            localStorage.setItem('customTheme', JSON.stringify(customThemeColors));
+            localStorage.setItem(STORAGE_KEYS.CUSTOM_THEME, JSON.stringify(customThemeColors));
         }
 
         // Mobile Refresh
-        localStorage.setItem('mobileRefresh', mobileRefresh);
+        localStorage.setItem(STORAGE_KEYS.MOBILE_REFRESH, mobileRefresh);
 
         // Show All Fixture Types
-        localStorage.setItem('showAllFixtureTypes', showAllFixtureTypes);
+        localStorage.setItem(STORAGE_KEYS.SHOW_ALL_FIXTURE_TYPES, showAllFixtureTypes);
 
         // Report Settings (if modified)
-        if (formData.reportFooter !== undefined) localStorage.setItem('reportFooter', formData.reportFooter);
-        if (formData.showDateInFooter !== undefined) localStorage.setItem('showDateInFooter', formData.showDateInFooter);
-        if (formData.showPageNumbers !== undefined) localStorage.setItem('showPageNumbers', formData.showPageNumbers);
+        if (formData.reportFooter !== undefined) localStorage.setItem(STORAGE_KEYS.REPORT_FOOTER, formData.reportFooter);
+        if (formData.showDateInFooter !== undefined) localStorage.setItem(STORAGE_KEYS.SHOW_DATE_IN_FOOTER, formData.showDateInFooter);
+        if (formData.showPageNumbers !== undefined) localStorage.setItem(STORAGE_KEYS.SHOW_PAGE_NUMBERS, formData.showPageNumbers);
 
         // Trigger a custom event or let App re-render if it listens to storage
         window.dispatchEvent(new Event('settingsChanged'));
 
+        setIsSaved(true);
         onClose();
     };
 
     const handleReset = async () => {
-        await resetShow();
-        setConfirmPending(null);
-        onClose();
-        window.location.reload();
+        try {
+            await resetShow();
+            setConfirmPending(null);
+            onClose();
+            window.location.reload();
+        } catch (err) {
+            console.error("Failed to reset show:", err);
+            toast.error("Failed to reset show.");
+        }
     };
 
     const handleConfirmAction = async () => {
         if (confirmPending === 'reset') {
             await handleReset();
         } else if (confirmPending === 'duplicates') {
-            const count = await removeDuplicates();
-            setCleanupMessage(`Removed ${count} duplicate instruments.`);
-            setTimeout(() => setCleanupMessage(null), 3000);
+            try {
+                const count = await removeDuplicates();
+                setCleanupMessage(`Removed ${count} duplicate instruments.`);
+                setTimeout(() => setCleanupMessage(null), 3000);
+            } catch (err) {
+                console.error("Failed to remove duplicates:", err);
+                toast.error("Failed to remove duplicates.");
+            }
             setConfirmPending(null);
         } else if (confirmPending === 'magicSheet') {
-            localStorage.removeItem('magicSheetConfigs');
-            localStorage.removeItem('magicSheet_groupOrder');
-            localStorage.removeItem('magicSheet_groupBy');
-            localStorage.removeItem('magicSheet_canvasMode');
-            localStorage.removeItem('magicSheet_mergedGroups');
-            localStorage.removeItem('magicSheet_collapsedGroups');
+            localStorage.removeItem(STORAGE_KEYS.MAGIC_SHEET_CONFIGS);
+            localStorage.removeItem(STORAGE_KEYS.MAGIC_SHEET_GROUP_ORDER);
+            localStorage.removeItem(STORAGE_KEYS.MAGIC_SHEET_GROUP_BY);
+            localStorage.removeItem(STORAGE_KEYS.MAGIC_SHEET_CANVAS_MODE);
+            localStorage.removeItem(STORAGE_KEYS.MAGIC_SHEET_MERGED_GROUPS);
+            localStorage.removeItem(STORAGE_KEYS.MAGIC_SHEET_COLLAPSED_GROUPS);
             toast.success('Magic Sheet settings cleared. Reload the page to see defaults.');
             setConfirmPending(null);
         }
     };
 
-    const handleBackup = async () => {
-        const json = await exportShow();
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `backup-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }, 100);
-    };
 
     if (!metadata) return null;
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] sm:p-4">
-            <div className="bg-[var(--bg-panel)] w-full h-full sm:h-auto sm:max-h-[90vh] max-w-3xl sm:rounded-xl shadow-2xl sm:border border-[var(--border-subtle)] overflow-hidden flex flex-col">
+            <div className="bg-[var(--bg-panel)] w-full max-w-4xl h-full sm:h-[80vh] sm:min-h-[600px] sm:max-h-[90vh] sm:rounded-xl shadow-2xl sm:border border-[var(--border-subtle)] overflow-hidden flex flex-col">
                 
                 {/* Mobile Stepper Header */}
                 <div className="flex md:hidden items-center border-b border-[var(--border-subtle)] bg-[var(--bg-card)] shrink-0 h-14">
@@ -312,63 +333,65 @@ export function SettingsModal({ onClose }) {
                     </button>
                 </div>
 
-                {/* Desktop Horizontal Tab Bar */}
-                <div className="hidden md:flex border-b border-[var(--border-subtle)] bg-[var(--bg-card)] shrink-0 h-14 overflow-x-auto scrollbar-hide">
-                    {SETTINGS_TABS.map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={classNames(
-                                "px-5 h-full flex items-center text-sm font-medium transition-colors uppercase tracking-wider whitespace-nowrap shrink-0 border-b-2",
-                                activeTab === tab.id
-                                    ? "text-[var(--accent-primary)] border-[var(--accent-primary)] bg-[var(--bg-hover)]"
-                                    : "text-[var(--text-secondary)] border-transparent hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-                            )}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
+                <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
+                    {/* Desktop Vertical Sidebar */}
+                    <div className="hidden md:flex flex-col w-48 lg:w-56 bg-[var(--bg-card)] border-r border-[var(--border-subtle)] shrink-0 overflow-y-auto p-3 gap-1">
+                        <div className="px-3 py-2 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
+                            Settings
+                        </div>
+                        <nav className="flex flex-col gap-1">
+                            {SETTINGS_TABS.map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={classNames(
+                                        "px-3 py-2 rounded-md transition-all text-sm font-medium flex items-center text-left whitespace-normal text-wrap break-words leading-tight border-transparent",
+                                        activeTab === tab.id
+                                            ? "bg-[var(--accent-primary)] text-white shadow-md shadow-indigo-500/20 outline-none"
+                                            : "bg-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] border-transparent outline-none"
+                                    )}
+                                    style={{
+                                        borderWidth: '0px',
+                                        backgroundColor: activeTab === tab.id ? 'var(--accent-primary)' : 'transparent'
+                                    }}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </nav>
+                    </div>
 
-                <div className="p-6 overflow-y-auto flex-1">
+                    {/* Main Content Area */}
+                    <div className="p-6 overflow-y-auto flex-1">
                     {activeTab === 'show' && (
                         <div className="space-y-4">
                             <h3 className="text-lg font-bold mb-4">Show Information</h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <label className="block">
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <label className="block sm:col-span-2">
                                     <span className="text-xs text-[var(--text-secondary)]">Show Name</span>
                                     <input
                                         type="text"
-                                        value={formData.name || ''}
+                                        value={displayFormData.name || ''}
                                         onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                        className="w-full mt-1"
-                                    />
-                                </label>
-                                <label className="block">
-                                    <span className="text-xs text-[var(--text-secondary)]">Venue</span>
-                                    <input
-                                        type="text"
-                                        value={formData.venue || ''}
-                                        onChange={e => setFormData({ ...formData, venue: e.target.value })}
-                                        className="w-full mt-1"
+                                        className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
                                     />
                                 </label>
                                 <label className="block">
                                     <span className="text-xs text-[var(--text-secondary)]">Designer</span>
                                     <input
                                         type="text"
-                                        value={formData.designer || ''}
+                                        value={displayFormData.designer || ''}
                                         onChange={e => setFormData({ ...formData, designer: e.target.value })}
-                                        className="w-full mt-1"
+                                        className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
                                     />
                                 </label>
                                 <label className="block">
                                     <span className="text-xs text-[var(--text-secondary)]">Assistant</span>
                                     <input
                                         type="text"
-                                        value={formData.assistant || ''}
+                                        value={displayFormData.assistant || ''}
                                         onChange={e => setFormData({ ...formData, assistant: e.target.value })}
-                                        className="w-full mt-1"
+                                        className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
                                     />
                                 </label>
                             </div>
@@ -379,34 +402,34 @@ export function SettingsModal({ onClose }) {
                                         <span className="text-xs text-[var(--text-secondary)]">Director</span>
                                         <input
                                             type="text"
-                                            value={formData.director || ''}
+                                            value={displayFormData.director || ''}
                                             onChange={e => setFormData({ ...formData, director: e.target.value })}
-                                            className="w-full mt-1"
+                                            className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
                                         />
                                     </label>
                                     <label className="block">
                                         <span className="text-xs text-[var(--text-secondary)]">Producer</span>
                                         <input
                                             type="text"
-                                            value={formData.producer || ''}
+                                            value={displayFormData.producer || ''}
                                             onChange={e => setFormData({ ...formData, producer: e.target.value })}
-                                            className="w-full mt-1"
+                                            className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
                                         />
                                     </label>
-                                    <label className="block">
+                                    <label className="block sm:col-span-2">
                                         <span className="text-xs text-[var(--text-secondary)]">Company</span>
                                         <input
                                             type="text"
-                                            value={formData.company || ''}
+                                            value={displayFormData.company || ''}
                                             onChange={e => setFormData({ ...formData, company: e.target.value })}
-                                            className="w-full mt-1"
+                                            className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
                                         />
                                     </label>
-                                    <div className="flex items-end underline">
+                                    <div className="flex items-end underline col-span-2">
                                         <button
                                             type="button"
                                             onClick={() => setShowMoreShowInfo(false)}
-                                            className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1 font-bold"
+                                            className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1 font-bold cursor-pointer"
                                         >
                                             SHOW LESS
                                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -420,7 +443,7 @@ export function SettingsModal({ onClose }) {
                                     <button
                                         type="button"
                                         onClick={() => setShowMoreShowInfo(true)}
-                                        className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1 font-bold"
+                                        className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1 font-bold cursor-pointer"
                                     >
                                         SHOW MORE
                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -429,6 +452,139 @@ export function SettingsModal({ onClose }) {
                                     </button>
                                 </div>
                             )}
+
+                            {/* Custom Show Fields */}
+                            <div className="border-t border-[var(--border-subtle)] pt-4 mt-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h4 className="font-bold text-sm text-[var(--text-primary)]">Custom Show Fields</h4>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const arr = [...customShowFieldsArray, { id: Math.random().toString(), label: '', value: '' }];
+                                            setFormData({ ...formData, customShowFieldsArray: arr });
+                                        }}
+                                        className="px-2.5 py-1 bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold rounded transition-colors flex items-center gap-1 active:scale-95 shadow-sm cursor-pointer border-none"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                                        Add Custom Field
+                                    </button>
+                                </div>
+
+                                {customShowFieldsArray.length === 0 ? (
+                                    <p className="text-xs text-[var(--text-secondary)] italic">No custom fields added. These will display on your PDF cover page.</p>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {customShowFieldsArray.map((field) => (
+                                            <div key={field.id} className="flex gap-4 items-end bg-[var(--bg-app)]/30 p-3 rounded-lg border border-[var(--border-subtle)]">
+                                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    <div>
+                                                        <span className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-wide block mb-1">Field Name</span>
+                                                        <input
+                                                            type="text"
+                                                            value={field.label}
+                                                            onChange={e => {
+                                                                const arr = customShowFieldsArray.map(f => f.id === field.id ? { ...f, label: e.target.value } : f);
+                                                                setFormData({ ...formData, customShowFieldsArray: arr });
+                                                            }}
+                                                            className="w-full bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
+                                                            placeholder="e.g. Stage Manager"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-wide block mb-1">Value</span>
+                                                        <input
+                                                            type="text"
+                                                            value={field.value}
+                                                            onChange={e => {
+                                                                const arr = customShowFieldsArray.map(f => f.id === field.id ? { ...f, value: e.target.value } : f);
+                                                                setFormData({ ...formData, customShowFieldsArray: arr });
+                                                            }}
+                                                            className="w-full bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
+                                                            placeholder="Value"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const arr = customShowFieldsArray.filter(f => f.id !== field.id);
+                                                        setFormData({ ...formData, customShowFieldsArray: arr });
+                                                    }}
+                                                    className="p-1.5 text-[var(--text-tertiary)] hover:text-[var(--error)] hover:bg-red-500/10 rounded transition-colors cursor-pointer border-none"
+                                                    title="Delete Custom Field"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'venue' && (
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-bold mb-4 text-[var(--text-primary)]">Venue Configuration</h3>
+                            <p className="text-xs text-[var(--text-secondary)]">
+                                This information remains constant across different shows and files.
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <label className="block">
+                                    <span className="text-xs text-[var(--text-secondary)] font-semibold uppercase tracking-wider">Venue Name</span>
+                                    <input
+                                        type="text"
+                                        value={venueName}
+                                        onChange={e => setVenueName(e.target.value)}
+                                        className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-subtle)] rounded-lg text-sm p-2 outline-none text-[var(--text-primary)] focus:border-[var(--accent-primary)]"
+                                        placeholder="e.g. Main Stage Theatre"
+                                        autoComplete="off"
+                                    />
+                                </label>
+                                <label className="block">
+                                    <span className="text-xs text-[var(--text-secondary)] font-semibold uppercase tracking-wider">Default Grid Height (Z)</span>
+                                    <input
+                                        type="number"
+                                        value={defaultGridHeight}
+                                        onChange={e => setDefaultGridHeight(e.target.value)}
+                                        className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-subtle)] rounded-lg text-sm p-2 outline-none text-[var(--text-primary)] focus:border-[var(--accent-primary)]"
+                                        placeholder="0"
+                                        autoComplete="off"
+                                    />
+                                </label>
+                            </div>
+                            <label className="block">
+                                <span className="text-xs text-[var(--text-secondary)] font-semibold uppercase tracking-wider">Venue Address</span>
+                                <input
+                                    type="text"
+                                    value={venueAddress}
+                                    onChange={e => setVenueAddress(e.target.value)}
+                                    className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-subtle)] rounded-lg text-sm p-2 outline-none text-[var(--text-primary)] focus:border-[var(--accent-primary)]"
+                                    placeholder="e.g. 123 Main St, New York, NY"
+                                    autoComplete="off"
+                                />
+                            </label>
+                            <label className="block">
+                                <span className="text-xs text-[var(--text-secondary)] font-semibold uppercase tracking-wider">Technical Contact Info</span>
+                                <input
+                                    type="text"
+                                    value={venueContact}
+                                    onChange={e => setVenueContact(e.target.value)}
+                                    className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-subtle)] rounded-lg text-sm p-2 outline-none text-[var(--text-primary)] focus:border-[var(--accent-primary)]"
+                                    placeholder="e.g. Technical Director - td@venue.org"
+                                    autoComplete="off"
+                                />
+                            </label>
+                            <label className="block">
+                                <span className="text-xs text-[var(--text-secondary)] font-semibold uppercase tracking-wider">Venue Notes / Specs</span>
+                                <textarea
+                                    value={venueNotes}
+                                    onChange={e => setVenueNotes(e.target.value)}
+                                    rows={4}
+                                    className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-subtle)] rounded-lg text-sm p-2 outline-none text-[var(--text-primary)] focus:border-[var(--accent-primary)] resize-none"
+                                    placeholder="e.g. Standard dimmer layout, circuit layout, weight limits, or height limits..."
+                                />
+                            </label>
                         </div>
                     )}
 
@@ -440,7 +596,7 @@ export function SettingsModal({ onClose }) {
                                 <input
                                     type="text"
                                     placeholder="Made in LXLog"
-                                    value={formData.reportFooter || ''}
+                                    value={displayFormData.reportFooter || ''}
                                     onChange={e => setFormData({ ...formData, reportFooter: e.target.value })}
                                     className="w-full mt-1"
                                 />
@@ -449,7 +605,7 @@ export function SettingsModal({ onClose }) {
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
                                         type="checkbox"
-                                        checked={formData.showDateInFooter !== false} // Default true
+                                        checked={displayFormData.showDateInFooter !== false} // Default true
                                         onChange={e => setFormData({ ...formData, showDateInFooter: e.target.checked })}
                                         className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-[var(--accent-primary)]"
                                     />
@@ -458,7 +614,7 @@ export function SettingsModal({ onClose }) {
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
                                         type="checkbox"
-                                        checked={formData.showPageNumbers !== false} // Default true
+                                        checked={displayFormData.showPageNumbers !== false} // Default true
                                         onChange={e => setFormData({ ...formData, showPageNumbers: e.target.checked })}
                                         className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-[var(--accent-primary)]"
                                     />
@@ -607,6 +763,19 @@ export function SettingsModal({ onClose }) {
                                     </div>
                                     <label className="relative inline-flex items-center cursor-pointer">
                                         <input type="checkbox" checked={showUniverse1} onChange={e => setShowUniverse1(e.target.checked)} className="sr-only peer" />
+                                        <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent-primary)]"></div>
+                                    </label>
+                                </div>
+
+                                <div className="h-px bg-[var(--border-subtle)]"></div>
+
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="font-semibold">Show XYZ Coordinates</div>
+                                        <div className="text-xs text-[var(--text-secondary)]">Display X, Y, and Z fields in instrument details</div>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" checked={showXYZ} onChange={e => setShowXYZ(e.target.checked)} className="sr-only peer" />
                                         <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent-primary)]"></div>
                                     </label>
                                 </div>
@@ -917,13 +1086,13 @@ export function SettingsModal({ onClose }) {
                             </p>
 
                             <div className="space-y-3">
-                                {customFieldDefs.map((field, idx) => (
+                                {activeCustomFieldDefs.map((field, idx) => (
                                     <div key={idx} className="flex gap-2">
                                         <input
                                             type="text"
                                             value={field}
                                             onChange={(e) => {
-                                                const newDefs = [...customFieldDefs];
+                                                const newDefs = [...activeCustomFieldDefs];
                                                 newDefs[idx] = e.target.value;
                                                 setCustomFieldDefs(newDefs);
                                             }}
@@ -932,7 +1101,7 @@ export function SettingsModal({ onClose }) {
                                         />
                                         <button
                                             onClick={() => {
-                                                const newDefs = customFieldDefs.filter((_, i) => i !== idx);
+                                                const newDefs = activeCustomFieldDefs.filter((_, i) => i !== idx);
                                                 setCustomFieldDefs(newDefs);
                                             }}
                                             className="px-3 text-[var(--text-tertiary)] hover:text-[var(--error)] hover:bg-red-500/10 rounded transition-colors"
@@ -945,7 +1114,7 @@ export function SettingsModal({ onClose }) {
                             </div>
 
                             <button
-                                onClick={() => setCustomFieldDefs([...customFieldDefs, `Field ${customFieldDefs.length + 1}`])}
+                                onClick={() => setCustomFieldDefs([...activeCustomFieldDefs, `Field ${activeCustomFieldDefs.length + 1}`])}
                                 className="mt-2 flex items-center gap-2 text-sm font-semibold text-[var(--accent-primary)] hover:text-[var(--accent-hover)] transition-colors"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -956,6 +1125,7 @@ export function SettingsModal({ onClose }) {
 
 
                     </div>
+                </div>
 
                 <div className="p-4 border-t border-[var(--border-subtle)] flex justify-end gap-3 bg-[var(--bg-panel)] shrink-0">
                     <button onClick={handleClose} className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-[#fff] transition-colors rounded-lg font-medium hover:bg-[var(--bg-hover)]">Cancel</button>
@@ -967,3 +1137,7 @@ export function SettingsModal({ onClose }) {
         </div>
     );
 }
+
+SettingsModal.propTypes = {
+    onClose: PropTypes.func.isRequired,
+};

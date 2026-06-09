@@ -1,20 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { version } from '../../package.json';
 
 import { useNavigate } from 'react-router-dom';
 
 export function About() {
-    const [appVersion, setAppVersion] = useState(version);
     const navigate = useNavigate();
-
-    useEffect(() => {
-        if (window.electron) {
-            // If in electron, try to get the real app version (which should match package.json anyway)
-            // or fallback to what we imported if getVersion returns electron version unexpectedly
-            const electronVer = window.electron.getVersion();
-            if (electronVer) setAppVersion(electronVer);
-        }
-    }, [appVersion]);
 
     return (
         <div className="flex flex-col h-full bg-[var(--bg-app)] text-[var(--text-primary)] relative overflow-y-auto">
@@ -27,9 +17,9 @@ export function About() {
                 <div className="flex items-start gap-8 flex-col md:flex-row">
                     {/* Logo Section */}
                     <div className="shrink-0 flex flex-col items-center text-center">
-                        <div className="w-24 h-24 bg-[var(--accent-primary)] rounded-2xl flex items-center justify-center text-white font-bold shadow-2xl shadow-indigo-500/20 text-5xl mb-4">L</div>
+                        <img src="/lxlog_logo_final.png" alt="LXLog Logo" className="w-24 h-24 rounded-2xl shadow-2xl shadow-indigo-500/20 mb-4" />
                         <h2 className="text-2xl font-bold tracking-tight">LX<span className="text-[var(--text-tertiary)] font-normal">Log</span></h2>
-                        <div className="text-xs text-[var(--text-secondary)] mt-1 font-mono">v{appVersion}</div>
+                        <div className="text-xs text-[var(--text-secondary)] mt-1 font-mono">v{version}</div>
                         <button
                             className="mt-3 px-3 py-1 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-secondary)] transition-colors"
                             onClick={() => navigate('/app/patch-notes')}
@@ -41,7 +31,6 @@ export function About() {
                     {/* Content Section */}
                     <div className="space-y-8 flex-1">
                         <section>
-                            {/* <h3 className="text-xl font-bold mb-3 text-[var(--accent-primary)]">Mission</h3> */}
                             <p className="text-[var(--text-secondary)] leading-relaxed text-lg mb-4">
                                 LXLog is a project to see if I can create a lighting paperwork web app that does what I want. It seems simple and free options are missing so I'm putting it out for other people to use as well. Please feel free to give me feedback or suggestions.
                             </p>
@@ -69,73 +58,79 @@ export function About() {
                             </div>
 
                             <div className="p-6 bg-[var(--bg-card)] rounded-lg border border-[var(--border-subtle)] md:col-span-2">
-                                <h4 className="font-bold mb-4 text-lg border-b border-[var(--border-subtle)] pb-2">Operation Manual</h4>
+                                <div className="flex justify-between items-center mb-4 border-b border-[var(--border-subtle)] pb-2 flex-wrap gap-2">
+                                    <h4 className="font-bold text-lg">Operation Manual</h4>
+                                    <a
+                                        href="/LXLog_Manual.htm"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-3 py-1.5 bg-[var(--accent-primary)] text-white text-xs font-bold rounded hover:bg-[var(--accent-hover)] transition-all shadow-lg flex items-center gap-1.5 active:scale-95"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                                        </svg>
+                                        Open Full Manual
+                                    </a>
+                                </div>
 
                                 <div className="space-y-6 text-sm text-[var(--text-secondary)]">
-                                    {/* Importing */}
+                                    {/* Step 1: Project Setup */}
                                     <div>
-                                        <h5 className="font-semibold text-[var(--text-primary)] mb-2">Importing & External Data</h5>
-                                        <p className="mb-2">Use the <span className="text-[var(--text-primary)] font-medium">Import</span> dropdown in the header to bring in data from other platforms.</p>
-                                        <ul className="list-disc list-inside space-y-1 ml-2">
-                                            <li><strong>EOS CSV:</strong> Import patch data exported from ETC Eos consoles.</li>
-                                            <li><strong>Lightwright Text:</strong> Import standard text exports from Lightwright.</li>
-                                            <li><strong>MA2 XML:</strong> Import fixture layers exported as XML from GrandMA2.</li>
-                                            <li><span className="opacity-40 italic">MVR: My Virtual Rig files (Currently Disabled)</span></li>
+                                        <h5 className="font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-full bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] flex items-center justify-center text-xs font-bold font-mono">1</span>
+                                            Project Setup (Import or Initialize)
+                                        </h5>
+                                        <p className="ml-7 leading-relaxed">
+                                            Start fresh by clicking <strong>New Show</strong> in the toolbar, or import existing paperwork using the <strong>Import</strong> dropdown (supports ETC Eos CSV, Lightwright Text, and MA2 XML formats). Configure custom show metadata fields in settings and set your persistent **Venue Profile** (default heights, address, notes) which remains constant across different show files.
+                                        </p>
+                                    </div>
+
+                                    {/* Step 2: Populate & Link Fixtures */}
+                                    <div>
+                                        <h5 className="font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-full bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] flex items-center justify-center text-xs font-bold font-mono">2</span>
+                                            Populate & Link Fixtures
+                                        </h5>
+                                        <p className="ml-7 leading-relaxed">
+                                            Click the plus icon (<strong>Add Instrument</strong>) to append fixtures to your schedule. Entering a fixture type automatically registers it in your local **Fixture Library** (or import GDTF profiles), allowing the app to auto-fill DMX footprints, wattages, weights, and frame sizes when matching type names.
+                                        </p>
+                                    </div>
+
+                                    {/* Step 3: Keyboard Entry & Sequential Numbering */}
+                                    <div>
+                                        <h5 className="font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-full bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] flex items-center justify-center text-xs font-bold font-mono">3</span>
+                                            Keyboard Entry & Sequential Numbering
+                                        </h5>
+                                        <p className="ml-7 leading-relaxed mb-2">
+                                            Double-click cells for inline editing and use arrow keys, <strong>Tab</strong>, and <strong>Enter</strong> for fast keyboard navigation.
+                                        </p>
+                                        <ul className="list-disc list-inside space-y-1 ml-9">
+                                            <li><strong>Multi-Selection:</strong> Hold <strong>Ctrl/Cmd</strong> or <strong>Shift</strong> while clicking rows, or drag over checkboxes to activate the <strong>Batch Edit</strong> panel.</li>
+                                            <li><strong>Renumbering:</strong> Type patterns like <code className="bg-[var(--bg-app)] px-1 rounded font-mono text-xs">1-x</code> or <code className="bg-[var(--bg-app)] px-1 rounded font-mono text-xs">1++</code> in the Channel or Unit fields to auto-number selected fixtures.</li>
+                                            <li><strong>Multi-Part Channels:</strong> Right-click rows to combine duplicates under a single channel with sequential parts (e.g. <code className="bg-[var(--bg-app)] px-1 rounded font-mono text-xs">.1</code>, <code className="bg-[var(--bg-app)] px-1 rounded font-mono text-xs">.2</code>).</li>
                                         </ul>
                                     </div>
 
-                                    {/* Fixture Library */}
+                                    {/* Step 4: Audit & Patch Validation */}
                                     <div>
-                                        <h5 className="font-semibold text-[var(--text-primary)] mb-2">Fixture Library</h5>
-                                        <p className="mb-2">The Fixture Library is your central hub for managing device profiles and automating data entry.</p>
-                                        <ul className="list-disc list-inside space-y-1 ml-2">
-                                            <li><strong>Import GDTF:</strong> Use the <em>Import GDTF</em> button to add new fixture definitions to your library.</li>
-                                            <li><strong>Fixture Details:</strong> Click any fixture card to open its detailed profile, including:
-                                                <ul className="list-[circle] list-inside ml-5 mt-1 opacity-80">
-                                                    <li><strong>DMX Map:</strong> View unrolled 16-bit/24-bit channel mappings with functional details.</li>
-                                                    <li><strong>Wheels:</strong> See color wheels, gobos, and slot visualizations.</li>
-                                                    <li><strong>Physical:</strong> Review manufacturer specs, weight, and power data.</li>
-                                                    <li><strong>Raw XML:</strong> Inspect the original source code of the GDTF profile.</li>
-                                                </ul>
-                                            </li>
-                                            <li><strong>Auto-Population:</strong> Once a fixture is in your library, selecting it in the <em>Instrument Detail</em> panel will automatically populate its DMX footprint and other metadata.</li>
-                                        </ul>
+                                        <h5 className="font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-full bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] flex items-center justify-center text-xs font-bold font-mono">4</span>
+                                            Audit & Patch Validation
+                                        </h5>
+                                        <p className="ml-7 leading-relaxed">
+                                            Use the <strong>DMX Universe</strong> visual grid to spot overlapping address conflicts (highlighted in red) and examine address footprints. Refine your spreadsheet view using the search bar or validation toggles to show only fixtures with missing addresses, duplicate channels, or incomplete fields.
+                                        </p>
                                     </div>
 
-                                    {/* managing fixtures */}
+                                    {/* Step 5: Deliverables & Backups */}
                                     <div>
-                                        <h5 className="font-semibold text-[var(--text-primary)] mb-2">Managing Fixtures</h5>
-                                        <ul className="list-disc list-inside space-y-1 ml-2">
-                                            <li><strong>Add/Edit:</strong> Click <em>Add Instrument</em> in the toolbar, or <strong>Double-click</strong> any row in the table to edit immediately.</li>
-                                            <li><strong>Selection:</strong>
-                                                <ul className="list-[circle] list-inside ml-5 mt-1 opacity-80">
-                                                    <li><strong>Click & Drag:</strong> Drag over checkboxes to select multiple rows quickly.</li>
-                                                    <li><strong>Shift + Click:</strong> Select a range of fixtures.</li>
-                                                    <li><strong>Batch Edit:</strong> Select multiple fixtures to enable the Batch Edit footer.</li>
-                                                </ul>
-                                            </li>
-                                            <li><strong>Delete:</strong> Click the trash icon twice to delete. Anywhere else to cancel.</li>
-                                            <li><strong>Export:</strong> Use the <strong>Export</strong> menu to generate Eos Patch CSVs, Lightwright TSVs, or generic spreadsheets.</li>
-                                        </ul>
-                                    </div>
-
-                                    {/* views */}
-                                    <div>
-                                        <h5 className="font-semibold text-[var(--text-primary)] mb-2">Views & Reports</h5>
-                                        <ul className="list-disc list-inside space-y-1 ml-2">
-                                            <li><strong>Instrument Schedule:</strong> The main spreadsheet view. Customize columns using the gear icon.</li>
-                                            <li><strong>Print Center:</strong> Bundle multiple reports into a single PDF with custom cover pages.</li>
-                                            <li><strong>Reports:</strong> Generate specialized paperwork like Channel Hookups, Hanging Schedules, and Patch reports.</li>
-                                            <li><strong>DMX Universe:</strong> Visual representation of your patch.</li>
-                                        </ul>
-                                    </div>
-
-                                    {/* saving */}
-                                    <div>
-                                        <h5 className="font-semibold text-[var(--text-primary)] mb-2">Saving & Loading</h5>
-                                        <p>
-                                            LXLog runs entirely in your browser. Use <strong>Save LXLog</strong> to download a <code className="bg-[var(--bg-app)] px-1 rounded">.lxlog</code> file to your computer.
-                                            Use <strong>Open LXLog</strong> to restore your work from a saved file.
+                                        <h5 className="font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-full bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] flex items-center justify-center text-xs font-bold font-mono">5</span>
+                                            Compile Deliverables & Backups
+                                        </h5>
+                                        <p className="ml-7 leading-relaxed">
+                                            Generate specialized paperwork instantly (Channel Hookups, Hanging Schedules, Magic Sheets, Power Reports). Go to the <strong>Print Center</strong> to select and arrange reports with a professional cover page into a single combined PDF. Always export a local <code className="bg-[var(--bg-app)] px-1 rounded font-mono text-xs">.lxlog</code> backup of your show file before closing the app.
                                         </p>
                                     </div>
                                 </div>

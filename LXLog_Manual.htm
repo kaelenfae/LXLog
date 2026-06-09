@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LXLog - Comprehensive Operation Manual</title>
+    <link rel="icon" type="image/png" href="public/lxlog_logo_final.png">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Dark Theme Variables */
+            --bg-body: #09090b;
+            --bg-sidebar: #121214;
+            --bg-panel: #18181b;
+            --bg-card: #202024;
+            --bg-hover: #27272a;
+            --bg-input: #0c0c0e;
+            
+            --border-default: #27272a;
+            --border-subtle: #1f1f23;
+            
+            --text-primary: #f4f4f5;
+            --text-secondary: #a1a1aa;
+            --text-tertiary: #71717a;
+            
+            --accent-primary: #6366f1;
+            --accent-hover: #4f46e5;
+            --accent-glow: rgba(99, 102, 241, 0.15);
+            
+            --callout-info: #0ea5e9;
+            --callout-info-bg: rgba(14, 165, 233, 0.1);
+            --callout-tip: #10b981;
+            --callout-tip-bg: rgba(16, 185, 129, 0.1);
+            --callout-warning: #f59e0b;
+            --callout-warning-bg: rgba(245, 158, 11, 0.1);
+            --callout-danger: #ef4444;
+            --callout-danger-bg: rgba(239, 68, 68, 0.1);
+
+            --kbd-bg: #2d2d34;
+            --kbd-border: #3f3f46;
+            --kbd-text: #f4f4f5;
+        }
+
+        [data-theme="light"] {
+            /* Light Theme Variables */
+            --bg-body: #f8fafc;
+            --bg-sidebar: #ffffff;
+            --bg-panel: #f1f5f9;
+            --bg-card: #ffffff;
+            --bg-hover: #e2e8f0;
+            --bg-input: #ffffff;
+            
+            --border-default: #cbd5e1;
+            --border-subtle: #e2e8f0;
+            
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-tertiary: #64748b;
+            
+            --accent-primary: #4f46e5;
+            --accent-hover: #4338ca;
+            --accent-glow: rgba(79, 70, 229, 0.1);
+            
+            --callout-info: #0284c7;
+            --callout-info-bg: rgba(2, 132, 199, 0.08);
+            --callout-tip: #059669;
+            --callout-tip-bg: rgba(5, 150, 105, 0.08);
+            --callout-warning: #d97706;
+            --callout-warning-bg: rgba(217, 119, 6, 0.08);
+            --callout-danger: #dc2626;
+            --callout-danger-bg: rgba(220, 38, 38, 0.08);
+
+            --kbd-bg: #e2e8f0;
+            --kbd-border: #cbd5e1;
+            --kbd-text: #0f172a;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-primary);
+            line-height: 1.6;
+            font-size: 16px;
+            display: flex;
+            min-h: 100vh;
+            overflow-x: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Sidebar Styling */
+        aside {
+            width: 300px;
+            background-color: var(--bg-sidebar);
+            border-right: 1px solid var(--border-default);
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease, background-color 0.3s;
+        }
+
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sidebar-logo {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .sidebar-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+        }
+
+        .sidebar-title span {
+            color: var(--text-tertiary);
+            font-weight: 400;
+        }
+
+        .search-box {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-subtle);
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 14px 10px 38px;
+            background-color: var(--bg-input);
+            border: 1px solid var(--border-default);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-glow);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 36px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            color: var(--text-tertiary);
+            pointer-events: none;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 16px;
+        }
+
+        .nav-section {
+            margin-bottom: 24px;
+        }
+
+        .nav-section-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-tertiary);
+            padding-left: 12px;
+            margin-bottom: 8px;
+        }
+
+        .nav-list {
+            list-style: none;
+        }
+
+        .nav-item {
+            margin-bottom: 4px;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 8px 12px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            border-radius: 6px;
+            transition: background-color 0.2s, color 0.2s;
+        }
+
+        .nav-link:hover {
+            background-color: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .nav-link.active {
+            background-color: var(--accent-primary);
+            color: #ffffff;
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+
+        .sidebar-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border-subtle);
+            font-size: 0.75rem;
+            color: var(--text-tertiary);
+            text-align: center;
+        }
+
+        /* Main Content Layout */
+        main {
+            margin-left: 300px;
+            flex-1: 1 1 auto;
+            min-width: 0;
+            padding: 40px 60px;
+            max-width: 1200px;
+        }
+
+        header {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-default);
+        }
+
+        .theme-toggle-btn {
+            background: none;
+            border: 1px solid var(--border-default);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+
+        .theme-toggle-btn:hover {
+            background-color: var(--bg-hover);
+            border-color: var(--text-secondary);
+        }
+
+        /* Content Sections */
+        section {
+            margin-bottom: 60px;
+            scroll-margin-top: 40px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-top: 36px;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--border-default);
+            color: var(--text-primary);
+        }
+
+        h3 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-top: 24px;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        p {
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            font-size: 1.05rem;
+            line-height: 1.7;
+        }
+
+        ul, ol {
+            margin-left: 24px;
+            margin-bottom: 20px;
+            color: var(--text-secondary);
+        }
+
+        li {
+            margin-bottom: 8px;
+            font-size: 1.05rem;
+        }
+
+        strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* Keycaps / Shortcut Styling */
+        kbd {
+            background-color: var(--kbd-bg);
+            border: 1px solid var(--kbd-border);
+            border-radius: 4px;
+            box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            color: var(--kbd-text);
+            display: inline-block;
+            font-family: inherit;
+            font-size: 0.85em;
+            font-weight: 600;
+            line-height: 1;
+            padding: 3px 6px;
+            white-space: nowrap;
+            margin: 0 2px;
+        }
+
+        /* Inline Code */
+        code {
+            font-family: 'Fira Code', monospace;
+            background-color: var(--bg-hover);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: var(--accent-primary);
+        }
+
+        /* Callouts / Alerts */
+        .callout {
+            border-left: 4px solid;
+            border-radius: 0 8px 8px 0;
+            padding: 18px 24px;
+            margin: 24px 0;
+        }
+
+        .callout-title {
+            font-weight: 700;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+        }
+
+        .callout-info {
+            border-color: var(--callout-info);
+            background-color: var(--callout-info-bg);
+        }
+        .callout-info .callout-title { color: var(--callout-info); }
+
+        .callout-tip {
+            border-color: var(--callout-tip);
+            background-color: var(--callout-tip-bg);
+        }
+        .callout-tip .callout-title { color: var(--callout-tip); }
+
+        .callout-warning {
+            border-color: var(--callout-warning);
+            background-color: var(--callout-warning-bg);
+        }
+        .callout-warning .callout-title { color: var(--callout-warning); }
+
+        .callout-danger {
+            border-color: var(--callout-danger);
+            background-color: var(--callout-danger-bg);
+        }
+        .callout-danger .callout-title { color: var(--callout-danger); }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 24px 0;
+            font-size: 0.95rem;
+            text-align: left;
+        }
+
+        th {
+            background-color: var(--bg-panel);
+            color: var(--text-primary);
+            font-weight: 600;
+            padding: 12px 16px;
+            border-bottom: 2px solid var(--border-default);
+        }
+
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+        }
+
+        tr:hover td {
+            background-color: var(--bg-hover);
+        }
+
+        /* Custom UI Component Visualizers (Mockups) */
+        .ui-visualizer {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-default);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 20px 0;
+            font-family: inherit;
+        }
+
+        /* Responsive Mobile Layout styles */
+        .mobile-menu-btn {
+            display: none;
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background-color: var(--accent-primary);
+            color: #ffffff;
+            border: none;
+            border-radius: 50%;
+            width: 56px;
+            height: 56px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .scroll-top-btn {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-default);
+            color: var(--text-primary);
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            z-index: 190;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .scroll-top-btn.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .mobile-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 90;
+            backdrop-filter: blur(4px);
+        }
+
+        /* SVG Icons */
+        .icon {
+            width: 20px;
+            height: 20px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        @media (max-width: 1024px) {
+            aside {
+                transform: translateX(-100%);
+            }
+            
+            aside.open {
+                transform: translateX(0);
+            }
+            
+            main {
+                margin-left: 0;
+                padding: 30px 24px;
+            }
+            
+            .mobile-menu-btn {
+                display: flex;
+            }
+            
+            .mobile-backdrop.open {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Mobile Navigation Toggle Menu Button -->
+    <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle Navigation Menu">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+    </button>
+    <div class="mobile-backdrop" id="mobileBackdrop"></div>
+
+    <!-- Scroll to Top Button -->
+    <button class="scroll-top-btn" id="scrollTopBtn" title="Scroll to Top">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M5 10l7-7 7 7M12 3v18" /></svg>
+    </button>
+
+    <!-- Sidebar TOC -->
+    <aside id="sidebar">
+        <div class="sidebar-header">
+            <img src="public/lxlog_logo_final.png" alt="LXLog Logo" class="sidebar-logo" onerror="this.src='https://raw.githubusercontent.com/kaelenfae/LXLog/main/public/lxlog_logo_final.png'">
+            <div class="sidebar-title">LX<span>Log</span></div>
+        </div>
+
+        <div class="search-box">
+            <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+            <input type="text" id="manualSearch" class="search-input" placeholder="Search manual features...">
+        </div>
+
+        <nav class="sidebar-nav">
+            <div class="nav-section">
+                <div class="nav-section-title">Getting Started</div>
+                <ul class="nav-list">
+                    <li class="nav-item"><a href="#introduction" class="nav-link">Introduction & Design</a></li>
+                    <li class="nav-item"><a href="#file-ops" class="nav-link">Show & File Operations</a></li>
+                </ul>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Data Integration</div>
+                <ul class="nav-list">
+                    <li class="nav-item"><a href="#import-wizard" class="nav-link">Import Wizard</a></li>
+                    <li class="nav-item"><a href="#export-wizard" class="nav-link">Export Wizard</a></li>
+                </ul>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Schedules & Grid Edit</div>
+                <ul class="nav-list">
+                    <li class="nav-item"><a href="#instrument-schedule" class="nav-link">Instrument Schedule</a></li>
+                    <li class="nav-item"><a href="#keyboard-nav" class="nav-link">Keyboard & Grid Controls</a></li>
+                    <li class="nav-item"><a href="#selection-bulk" class="nav-link">Selection & Bulk Edit</a></li>
+                    <li class="nav-item"><a href="#context-menu" class="nav-link">Right-Click Context Menu</a></li>
+                    <li class="nav-item"><a href="#filter-search" class="nav-link">Search & Grid Filtering</a></li>
+                </ul>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Fixture Management</div>
+                <ul class="nav-list">
+                    <li class="nav-item"><a href="#instrument-detail" class="nav-link">Instrument Details Panel</a></li>
+                    <li class="nav-item"><a href="#fixture-library" class="nav-link">GDTF Fixture Library</a></li>
+                    <li class="nav-item"><a href="#dmx-universe" class="nav-link">DMX Universe View</a></li>
+                </ul>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Paperwork & Printing</div>
+                <ul class="nav-list">
+                    <li class="nav-item"><a href="#print-center" class="nav-link">Print Center PDF Bundler</a></li>
+                    <li class="nav-item"><a href="#reports-list" class="nav-link">Schedules & Reports List</a></li>
+                </ul>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Configuration</div>
+                <ul class="nav-list">
+                    <li class="nav-item"><a href="#settings" class="nav-link">Settings & Options</a></li>
+                </ul>
+            </div>
+        </nav>
+
+        <div class="sidebar-footer">
+            LXLog Documentation &copy; 2026
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main id="content">
+        <header>
+            <button class="theme-toggle-btn" id="themeToggleBtn">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" /></svg>
+                <span>Toggle Theme</span>
+            </button>
+        </header>
+
+        <!-- Section: Introduction -->
+        <section id="introduction">
+            <h1>LXLog Operation Manual</h1>
+            <p>
+                LXLog is a modern, high-performance, and privacy-respecting lighting paperwork application designed for lighting designers, production electricians, and programmers. It operates as a local-first Single Page Application (SPA), meaning all of your data, shows, and imported profiles remain directly in your web browser.
+            </p>
+
+            <div class="callout callout-info">
+                <div class="callout-title">
+                    <svg class="icon" style="width:16px;height:16px;" viewBox="0 0 24 24"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Privacy Statement
+                </div>
+                LXLog does not upload your show data or fixture profiles to any cloud database. All logs, schedules, and custom settings are stored locally in your browser's IndexedDB engine (using Dexie.js) and are never shared.
+            </div>
+
+            <h3>Core Architectural Features</h3>
+            <ul>
+                <li><strong>Local-First Database:</strong> Utilizes browser-indexed storage. Your show is preserved between browser reloads without requiring active saves, though exporting backups is highly recommended.</li>
+                <li><strong>GDTF Integration:</strong> Reads General Device Type Format (.gdtf) files to auto-populate attributes such as DMX footprint, power consumption, weights, and detailed DMX mapping.</li>
+                <li><strong>Augment3d Support:</strong> Captures physical coordinates (X, Y, Z) and distance offsets to allow complete stage layout documentation.</li>
+            </ul>
+        </section>
+
+        <!-- Section: Show & File Operations -->
+        <section id="file-ops">
+            <h2>Show & File Operations</h2>
+            <p>
+                LXLog allows you to manage multiple show files and reset workspace structures as needed using standard controls located in the application header and the Database Settings panel.
+            </p>
+
+            <h3>Creating a New Show</h3>
+            <p>
+                Click the <strong>New Show</strong> button in the header. The application will present a modal prompting you for the following metadata fields:
+            </p>
+            <ul>
+                <li>Show Name</li>
+                <li>Venue</li>
+                <li>Lighting Designer</li>
+                <li>Assistant Lighting Designer</li>
+                <li>Director / Producer / Company</li>
+            </ul>
+            <p>
+                Upon submission, a fresh show database is initialized in IndexedDB, clearing any current active fixture schedule.
+            </p>
+
+            <h3>Saving and Backing Up</h3>
+            <p>
+                Although IndexedDB retains data automatically, you can save a physical file of your show to disk by clicking <strong>Save LXLog</strong> in the header. This compiles the database tables (instruments, custom field configurations, targets) and downloads a unified <code>.lxlog</code> JSON file.
+            </p>
+            <p>
+                The download filename is automatically formatted as: <br>
+                <code>[ShowName]-[YYYY-MM-DD]-[HHMM].lxlog</code>
+            </p>
+
+            <h3>Loading a Saved Show</h3>
+            <p>
+                To restore your workspace from a backup file:
+            </p>
+            <ol>
+                <li>Click <strong>Open LXLog</strong> in the header.</li>
+                <li>Select your saved <code>.lxlog</code> file.</li>
+                <li>The application will restore your metadata, instruments, fixture profiles, custom fields, and custom Magic Sheet groupings.</li>
+            </ol>
+        </section>
+
+        <!-- Section: Import Wizard -->
+        <section id="import-wizard">
+            <h2>Import Wizard</h2>
+            <p>
+                LXLog has a multi-step Import Wizard to integrate lighting data from other software environments. To access this wizard, click the <strong>Import</strong> button in the application header.
+            </p>
+
+            <div class="callout callout-warning">
+                <div class="callout-title">Import Modes</div>
+                When importing external data, you must choose between two modes:
+                <ul>
+                    <li><strong>Replace Mode:</strong> Clears all existing database entries and initializes the schedule exclusively with the imported file. You will be prompted to enter new show metadata.</li>
+                    <li><strong>Merge Mode:</strong> Merges imported fixtures into your current show. Fixtures are merged and matched on channel and part designations. Existing data is preserved.</li>
+                </ul>
+            </div>
+
+            <h3>Supported Import Formats</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Format Type</th>
+                        <th>File Extension</th>
+                        <th>Workflow Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Lightwright Text</strong></td>
+                        <td><code>.txt</code></td>
+                        <td>Processes tab-delimited files. Opens a column-mapping step to align Lightwright headers (e.g. Dimmer, Load, Accessory) with LXLog fields. Support for custom columns mapping is included.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>ETC Eos CSV</strong></td>
+                        <td><code>.csv</code></td>
+                        <td>Directly processes ETC Eos CSV patch exports. Auto-maps standard console headers and extracts coordinates and targets.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>MA2 XML</strong></td>
+                        <td><code>.xml</code></td>
+                        <td>Imports grandMA2 XML layer structures directly into the database.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>MVR (My Virtual Rig)</strong></td>
+                        <td><code>.mvr</code></td>
+                        <td><em>Note: Currently disabled in interface and marked as under development.</em></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>EOS CSV Target and Coordinate Extraction</h3>
+            <p>
+                The Eos CSV import logic is highly optimized for ETC console systems:
+            </p>
+            <ul>
+                <li><strong>Coordinates Mapping:</strong> Location variables from the Augment3d engine are fully extracted:
+                    <ul>
+                        <li><code>Location_X</code> is mapped to the instrument's <strong>X Coordinate</strong> and defaults to <strong>Distance from Center</strong>.</li>
+                        <li><code>Location_Y</code> is mapped to the <strong>Y Coordinate</strong> (depth).</li>
+                        <li><code>Location_Z</code> is mapped to the <strong>Z Coordinate</strong> (height).</li>
+                    </ul>
+                </li>
+                <li><strong>Z Coordinate Fallback:</strong> If location coordinates are missing or equal to 0, they are left unpopulated in details, and Z defaults to the <strong>Default Grid Height (Z)</strong> configured in Settings.</li>
+                <li><strong>Console Targets:</strong> The CSV parser extracts the <code>TARGETS</code> section from the Eos export file, parsing Groups, Presets, and Submasters, listing their ID number, Labels, and Channel strings to populate the <strong>EOS Targets</strong> Report.</li>
+            </ul>
+        </section>
+
+        <!-- Section: Export Wizard -->
+        <section id="export-wizard">
+            <h2>Export Wizard</h2>
+            <p>
+                Clicking the <strong>Export</strong> button in the header opens a wizard allowing you to export your database back into standard files suitable for consoles or spreadsheet editors.
+            </p>
+            <h3>Supported Export Formats</h3>
+            <ul>
+                <li><strong>ETC Eos CSV:</strong> Conforms strictly to ETC patch CSV requirements, allowing you to load your schedule straight into ETC console patch screens.</li>
+                <li><strong>Lightwright (TSV):</strong> Generates a tab-separated text file conforming to Lightwright import specifications.</li>
+                <li><strong>Generic CSV:</strong> Generates a standard comma-separated spreadsheet with all schedule columns, including custom user-defined fields.</li>
+            </ul>
+        </section>
+
+        <!-- Section: Instrument Schedule -->
+        <section id="instrument-schedule">
+            <h2>Instrument Schedule Grid</h2>
+            <p>
+                The Instrument Schedule is the central workspace layout. It is built as a virtualized grid, allowing thousands of rows of lighting instruments to load and render with sub-millisecond responsiveness.
+            </p>
+
+            <h3>Grid Customization</h3>
+            <ul>
+                <li><strong>Column Reordering & Visibility:</strong> Click the gear settings icon in the grid toolbar. You can drag and drop columns to reorder their layout, or check/uncheck columns to toggle visibility.</li>
+                <li><strong>Column Resizing:</strong> Hover over the divider between headers. Click and drag to adjust the width of any column. Column widths are automatically persisted to local storage.</li>
+            </ul>
+
+            <h3>Data Entry Modes</h3>
+            <ul>
+                <li><strong>In-Line Cell Editing:</strong> Double-click any cell in the table grid. The cell converts into an input field allowing direct modification.</li>
+                <li><strong>Keyboard Editing:</strong> Select a cell and press <kbd>Enter</kbd> to activate the editor. Type the value and press <kbd>Enter</kbd> or <kbd>Tab</kbd> to save.</li>
+            </ul>
+        </section>
+
+        <!-- Section: Keyboard Controls -->
+        <section id="keyboard-nav">
+            <h2>Keyboard Navigation & Grid Controls</h2>
+            <p>
+                The spreadsheet grid supports keyboard shortcuts for fast data entry:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Shortcut Key</th>
+                        <th>Action Performed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><kbd>Arrow Keys</kbd></td>
+                        <td>Navigates the cell selection highlight up, down, left, or right across columns and rows.</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>Enter</kbd></td>
+                        <td>Activates the inline cell editor. While editing, pressing <kbd>Enter</kbd> saves changes and shifts focus to the cell directly below (Shift+Enter shifts focus up).</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>Tab</kbd></td>
+                        <td>Saves inline changes and moves focus to the cell to the right (Shift+Tab moves focus left).</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>Shift</kbd> + <kbd>Arrow Up / Down</kbd></td>
+                        <td>Selects a contiguous block range of instrument rows, starting from the current selection anchor.</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td>
+                        <td>Initiates deletion of all currently selected instruments. Shows a 4-second confirmation state in the footer to prevent accidental deletion.</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>Esc</kbd></td>
+                        <td>Exits active cell editing mode without saving, closes the Sidebar Details panel, or deselects all currently selected instruments. Focus is returned to the grid.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Section: Selection & Bulk Edit -->
+        <section id="selection-bulk">
+            <h2>Selection & Bulk Editing</h2>
+            <p>
+                LXLog provides powerful batch processing options when editing multiple instruments at once.
+            </p>
+
+            <h3>Selecting Multiple Instruments</h3>
+            <ul>
+                <li><strong>Checkbox Click-and-Drag:</strong> Hover over the row selection checkboxes on the left side of the grid. Click and drag down or up to select multiple rows.</li>
+                <li><strong>Range Select:</strong> Click on a row, hold down <kbd>Shift</kbd>, and click another row to select all instruments between them.</li>
+            </ul>
+
+            <h3>The Bulk Edit Panel</h3>
+            <p>
+                When two or more instruments are selected, a floating Bulk Edit footer is displayed. Click **Bulk Edit** to open a collective detail view. Any fields modified in this panel will be updated across all selected instruments.
+            </p>
+
+            <h3>Sequential Auto-Numbering Patterns</h3>
+            <p>
+                When batch editing the <strong>Channel</strong> or <strong>Unit</strong> fields, you can use numbering patterns to sequentially number the fixtures:
+            </p>
+            <ul>
+                <li><strong>Range Pattern (<code>Start-End</code> or <code>Start-x</code>):</strong> Typing <code>1-x</code>, <code>1-10</code>, or <code>101-x</code> will auto-number the selected instruments sequentially starting from the left-hand integer (e.g. 101, 102, 103...).</li>
+                <li><strong>Increment Pattern (<code>Start++</code>):</strong> Typing <code>1++</code> or <code>100++</code> will start numbering from the specified number and increment by 1 for each subsequent fixture in the selection list.</li>
+            </ul>
+
+            <div class="callout callout-tip">
+                <div class="callout-title">Batch Attribute Propagation</div>
+                Updating GDTF-linked attributes (like DMX Footprint, Wattage, Weight, or Gel Frame Size) during a bulk edit automatically updates all fixtures in the show sharing those GDTF types.
+            </div>
+        </section>
+
+        <!-- Section: Context Menu -->
+        <section id="context-menu">
+            <h2>Right-Click Context Menu</h2>
+            <p>
+                Right-clicking on any instrument row in the schedule displays a context menu for quick operations. If you right-click on an unselected row, it is automatically selected.
+            </p>
+            <h3>Available Context Menu Options</h3>
+            <ul>
+                <li><strong>Edit (<kbd>Enter</kbd>):</strong> Opens the detailed instrument sidebar on the right side of the screen.</li>
+                <li><strong>Duplicate:</strong> Duplicates the selected instrument(s). If multiple rows are selected, it duplicates the entire selection.</li>
+                <li><strong>Select All "[Type]":</strong> Selects all instruments in the schedule that share the same fixture type (e.g., "Source Four 19deg").</li>
+                <li><strong>Select All "[Position]":</strong> Selects all instruments in the schedule that share the same hanging position (e.g., "Electric 1").</li>
+                <li><strong>Renumber "[Position]":</strong> Triggers a position renumbering prompt. It will automatically renumber unit numbers (from 1 to N) for all fixtures on that position based on the current active sort order.</li>
+                <li><strong>Delete (<kbd>Del</kbd>):</strong> Deletes the selected instrument(s) (with confirmation).</li>
+            </ul>
+        </section>
+
+        <!-- Section: Search & Grid Filtering -->
+        <section id="filter-search">
+            <h2>Search & Grid Filtering</h2>
+            <p>
+                The schedule toolbar provides robust options to filter down your instrument grid. Click the **Filters** button to open the configuration panel.
+            </p>
+            
+            <h3>Search Text</h3>
+            <p>
+                A real-time search input matches text across purpose, hanging position, type, channel, and note fields, filtering rows as you type.
+            </p>
+
+            <h3>Dropdown Filters</h3>
+            <p>
+                Narrow down the grid by selecting specific items from populated lists:
+            </p>
+            <ul>
+                <li><strong>Type:</strong> Filter by fixture profile names.</li>
+                <li><strong>Position:</strong> Filter by specific hang positions.</li>
+                <li><strong>Color:</strong> Filter by specific gel colors.</li>
+                <li><strong>Gobo:</strong> Filter by specific pattern templates.</li>
+            </ul>
+
+            <h3>Validation Filters</h3>
+            <p>
+                These tools allow electricians to check for data entry errors before exporting console patches:
+            </p>
+            <ul>
+                <li><strong>Missing Address:</strong> Shows fixtures that do not have a DMX patch address.</li>
+                <li><strong>Missing Channel:</strong> Shows fixtures that do not have a control channel.</li>
+                <li><strong>Incomplete Only:</strong> Filters for fixtures missing core attributes (like fixture type or position).</li>
+                <li><strong>Potential Duplicates:</strong> Highlights duplicate DMX addresses or channel numbers in red, helping you spot patch conflicts immediately.</li>
+            </ul>
+        </section>
+
+        <!-- Section: Instrument Details Panel -->
+        <section id="instrument-detail">
+            <h2>Instrument Details Panel</h2>
+            <p>
+                When you click an instrument row or double-click to edit, the Master-Detail layout reveals the Details Panel on the right side of the viewport.
+            </p>
+
+            <h3>Coordinates Integration</h3>
+            <p>
+                If <strong>Show XYZ Coordinates</strong> is checked in settings, the details panel will display X, Y, and Z fields:
+            </p>
+            <ul>
+                <li><strong>Distance / X:</strong> Displays the left/right offset from the center line.</li>
+                <li><strong>Y Coordinate:</strong> Displays the front-to-back depth coordinate.</li>
+                <li><strong>Z Coordinate:</strong> Displays the height coordinate. This field is automatically populated with the default grid height setting if the instrument is new.</li>
+            </ul>
+
+            <h3>Note-Taking and Timestamps</h3>
+            <p>
+                At the bottom of the details panel, the Notes section allows you to record multiple notes on individual instruments:
+            </p>
+            <ul>
+                <li>Notes show the username/system label and a localized timestamp.</li>
+                <li>Notes are useful for keeping track of repair requests, focus instructions, or circuit changes.</li>
+                <li>You can add notes of type "user" or "system".</li>
+            </ul>
+
+            <h3>Fixture Library Sync</h3>
+            <p>
+                When selecting an Instrument Type, the details panel checks your local GDTF library. If a match is found, it automatically retrieves and populates the fixture's DMX footprint, wattage, weight, and gel frame size, eliminating repetitive typing.
+            </p>
+        </section>
+
+        <!-- Section: GDTF Fixture Library -->
+        <section id="fixture-library">
+            <h2>GDTF Fixture Library</h2>
+            <p>
+                The Fixture Library manages device definitions (.gdtf) to automate instrument scheduling.
+            </p>
+
+            <h3>Importing Fixture Profiles</h3>
+            <p>
+                Click <strong>Import GDTF</strong> to select a <code>.gdtf</code> file from your computer. The GDTF parser will extract physical, DMX, and graphical data, adding it to your show's fixture definition database.
+            </p>
+
+            <h3>Profile Tabs</h3>
+            <p>
+                Clicking on any fixture card in the library opens a modal showing four tabs:
+            </p>
+            <ol>
+                <li><strong>DMX Map:</strong> Displays unrolled DMX channel layouts, listing channels (e.g. Pan, Tilt, Color1, Cyan), bit resolutions, and default value ranges.</li>
+                <li><strong>Wheels:</strong> Displays slot visualizations for color and gobo wheels, including manufacturer descriptions and hex colors or slot images.</li>
+                <li><strong>Physical:</strong> Displays physical specifications (weight, wattage, dimensions, luminous flux, beam angle, and connectors).</li>
+                <li><strong>Raw XML:</strong> Displays the raw XML layout of the GDTF file, allowing advanced users to inspect the underlying structure directly.</li>
+            </ol>
+
+            <h3>Generic Profiles</h3>
+            <p>
+                If you enter a fixture type anywhere in the application—including the main schedule grid, the details editor, the bulk "Add Instruments" form, or via file imports (Lightwright, Eos, MA2)—LXLog automatically creates a <strong>Generic Profile</strong> in the Fixture Library. You can manually adjust its default attributes (such as wattage, weight, or DMX footprint) in the details panel, which will apply to all matching generic fixtures across the show.
+            </p>
+        </section>
+
+        <!-- Section: DMX Universe View -->
+        <section id="dmx-universe">
+            <h2>DMX Universe View</h2>
+            <p>
+                The DMX Universe View provides a visual grid mapping the 512 DMX slots of a chosen universe. It is accessed via the side navigation bar.
+            </p>
+
+            <h3>Grid Visualization Key</h3>
+            <ul>
+                <li><strong>Solid Highlight:</strong> Identifies the start address of a patched fixture.</li>
+                <li><strong>Muted Highlight:</strong> Indicates subsequent slots occupied by the fixture's DMX footprint.</li>
+                <li><strong>Red Highlight (Overlap):</strong> Highlights address overlap conflicts, showing where two or more fixtures are patched to the same DMX address.</li>
+            </ul>
+
+            <h3>Interactivity</h3>
+            <ul>
+                <li>Hovering over any occupied slot displays a tooltip listing the channel, part, instrument type, and address coordinates.</li>
+                <li>Clicking on any cell navigates the application directly to the details panel for that fixture, allowing quick patch corrections.</li>
+            </ul>
+        </section>
+
+        <!-- Section: Print Center PDF Bundler -->
+        <section id="print-center">
+            <h2>Print Center PDF Bundler</h2>
+            <p>
+                The Print Center is a tool for bundling multiple project reports into a single, cohesive PDF document.
+            </p>
+
+            <h3>Printing Steps</h3>
+            <ol>
+                <li>Check the reports you wish to compile (e.g. Channel Hookup, Hanging Schedule, Patch).</li>
+                <li>Select the page layout orientation (Portrait or Landscape).</li>
+                <li>Toggle the <strong>Include Combined Cover Page</strong> checkbox.</li>
+                <li>Click <strong>Generate Combined PDF</strong>. The application will render and download a single file.</li>
+            </ol>
+        </section>
+
+        <!-- Section: Schedules & Reports List -->
+        <section id="reports-list">
+            <h2>Schedules & Reports List</h2>
+            <p>
+                LXLog offers several specialized reports in the sidebar. All reports support orientation toggling, page breaking, and individual PDF downloads.
+            </p>
+
+            <h3>Channel Hookup</h3>
+            <p>
+                A report sorted numerically by Channel and Part.
+            </p>
+            <ul>
+                <li><strong>Part Notation:</strong> Secondary parts are formatted based on Settings (e.g. <code>P2</code>, <code>.2</code>, hidden, or shown as duplicates).</li>
+                <li><strong>Color Swatches:</strong> Checkboxes toggle visual gel swatches next to gel colors.</li>
+            </ul>
+
+            <h3>Hanging Schedule</h3>
+            <p>
+                A report grouped by hanging Position, and sorted by Unit number. Shows a summary of unit counts and total wattage load at the bottom of each position.
+            </p>
+
+            <h3>Magic Sheet</h3>
+            <p>
+                An interactive masonry-layout report displaying groups of channels:
+            </p>
+            <ul>
+                <li><strong>Drag and Drop:</strong> Drag the hamburger icons to visually arrange card groups.</li>
+                <li><strong>Group Options Menu:</strong> Click the card menu to configure:
+                    <ul>
+                        <li><strong>Lock Layout:</strong> Prevent dragging.</li>
+                        <li><strong>Hide Card:</strong> Hide the card from screen and prints.</li>
+                        <li><strong>Sort Order:</strong> Low-to-high or high-to-low channel numbers.</li>
+                        <li><strong>Fill Direction:</strong> Fill channels from bottom-up or top-down.</li>
+                        <li><strong>Columns:</strong> Grid columns layout (1 to 20 columns).</li>
+                        <li><strong>Card Width:</strong> Card column spans (1/3, 2/3, or full width).</li>
+                    </ul>
+                </li>
+                <li><strong>Dominant Color Gradient:</strong> Cards automatically color their borders and backgrounds based on the dominant gel color in that group.</li>
+                <li><strong>Partial Row Distribution:</strong> Partial rows are centered and distributed evenly for a clean appearance.</li>
+            </ul>
+
+            <h3>Patch Report</h3>
+            <p>
+                A compact patch listing sorted by Channel and Address. It supports multi-column layouts (Auto/1/2/3/4 columns) and a "Group by Type" toggle.
+            </p>
+
+            <h3>Equipment List</h3>
+            <p>
+                An alphabetical summary listing total quantities of each unique instrument type.
+            </p>
+
+            <h3>Cutting List</h3>
+            <p>
+                Counts gel cuts for the show. Group by Color (gel colors with size counts) or by Frame Size (frame sizes with color counts). Auto-splits gel chains (e.g. <code>R02 + R80</code> counts as two separate gel cuts).
+            </p>
+
+            <h3>Power Report</h3>
+            <p>
+                Summarizes total fixture counts and total wattage loads for each hanging position.
+            </p>
+
+            <h3>EOS Targets</h3>
+            <p>
+                Displays Groups (emerald), Presets (purple), and Subs (amber) imported from an EOS CSV file.
+            </p>
+        </section>
+
+        <!-- Section: Settings & Options -->
+        <section id="settings">
+            <h2>Settings & Options</h2>
+            <p>
+                The Settings Modal is accessed via the gear icon in the main header and is divided into several sections:
+            </p>
+
+            <h3>Show Information</h3>
+            <p>
+                Allows editing of show metadata (Name, Venue, Designer, ALD, Director, Producer, Company) to populate cover pages and report headers.
+            </p>
+
+            <h3>Report Settings</h3>
+            <ul>
+                <li><strong>Unit System:</strong> Select Feet (ft) or Meters (m) for coordinates.</li>
+                <li><strong>Default Grid Height (Z):</strong> Prefills the height coordinate (Z) on new instruments and imports.</li>
+                <li><strong>Spacing & Scaling:</strong> Adjusts print margins and layouts.</li>
+            </ul>
+
+            <h3>Interface Settings</h3>
+            <ul>
+                <li><strong>Universe Separator:</strong> Select colon (<code>:</code>) or slash (<code>/</code>) formatting (e.g. "2:1" vs "2/1").</li>
+                <li><strong>Always Show Universe 1:</strong> Toggles display of "1:1" vs just "1".</li>
+                <li><strong>Show XYZ Coordinates:</strong> Toggles the visibility of coordinate input fields in the details panel.</li>
+            </ul>
+
+            <h3>Themes</h3>
+            <p>
+                Select from several UI themes, including Slate, Amber, Rose, Emerald, Sapphire, Velvet, Cyberpunk, and OLED Black.
+            </p>
+
+            <h3>Database Management</h3>
+            <ul>
+                <li><strong>Reset Show:</strong> Deletes all instruments, targets, and show data (non-reversible).</li>
+                <li><strong>Reset Magic Sheet:</strong> Restores Magic Sheet layouts and sorting configurations to default values.</li>
+            </ul>
+
+            <h3>Global Custom Fields</h3>
+            <p>
+                Allows you to define custom columns (e.g. "Circuit Name", "Proportion", "Purpose Details"). Once defined, these custom fields will display as grid columns in the schedule and input fields in the details panel.
+            </p>
+        </section>
+    </main>
+
+    <script>
+        // Theme Toggle Logic
+        const themeToggleBtn = document.getElementById('themeToggleBtn');
+        const htmlElement = document.documentElement;
+
+        themeToggleBtn.addEventListener('click', () => {
+            const currentTheme = htmlElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            htmlElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('manual-theme', newTheme);
+        });
+
+        // Load saved theme
+        const savedTheme = localStorage.getItem('manual-theme');
+        if (savedTheme) {
+            htmlElement.setAttribute('data-theme', savedTheme);
+        }
+
+        // Active TOC Highlighting & Scroll Top logic
+        const navLinks = document.querySelectorAll('.nav-link');
+        const sections = document.querySelectorAll('section');
+        const scrollTopBtn = document.getElementById('scrollTopBtn');
+
+        window.addEventListener('scroll', () => {
+            // Scroll to Top Button visibility
+            if (window.scrollY > 300) {
+                scrollTopBtn.classList.add('visible');
+            } else {
+                scrollTopBtn.classList.remove('visible');
+            }
+
+            // TOC highlighting
+            let currentActive = '';
+            sections.forEach(sec => {
+                const secTop = sec.offsetTop;
+                if (window.scrollY >= secTop - 100) {
+                    currentActive = sec.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === `#${currentActive}`) {
+                    link.classList.add('active');
+                }
+            });
+        });
+
+        scrollTopBtn.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        // Mobile Sidebar Drawer Menu Toggle
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const sidebar = document.getElementById('sidebar');
+        const backdrop = document.getElementById('mobileBackdrop');
+
+        const toggleDrawer = () => {
+            sidebar.classList.toggle('open');
+            backdrop.classList.toggle('open');
+        };
+
+        mobileMenuBtn.addEventListener('click', toggleDrawer);
+        backdrop.addEventListener('click', toggleDrawer);
+        navLinks.forEach(link => link.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            backdrop.classList.remove('open');
+        }));
+
+        // Search Filter for the manual itself
+        const manualSearch = document.getElementById('manualSearch');
+        
+        manualSearch.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            
+            sections.forEach(sec => {
+                const text = sec.innerText.toLowerCase();
+                const headers = sec.querySelectorAll('h1, h2, h3');
+                let headerMatch = false;
+                headers.forEach(h => {
+                    if (h.innerText.toLowerCase().includes(query)) headerMatch = true;
+                });
+
+                if (text.includes(query) || headerMatch || query === '') {
+                    sec.style.display = 'block';
+                } else {
+                    sec.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

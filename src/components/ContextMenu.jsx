@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
+import PropTypes from 'prop-types';
 
 export function ContextMenu({ x, y, onClose, actions }) {
     const menuRef = useRef(null);
@@ -25,11 +26,29 @@ export function ContextMenu({ x, y, onClose, actions }) {
         };
     }, [onClose]);
 
-    // Adjust position to stay within viewport
+    useLayoutEffect(() => {
+        if (menuRef.current) {
+            const rect = menuRef.current.getBoundingClientRect();
+            let finalX = x;
+            let finalY = y;
+
+            if (x + rect.width > window.innerWidth) {
+                finalX = window.innerWidth - rect.width - 8;
+            }
+            if (y + rect.height > window.innerHeight) {
+                finalY = window.innerHeight - rect.height - 8;
+            }
+
+            menuRef.current.style.left = `${Math.max(8, finalX)}px`;
+            menuRef.current.style.top = `${Math.max(8, finalY)}px`;
+        }
+    }, [x, y]);
+
+    // Initial position style
     const adjustedStyle = {
         position: 'fixed',
-        top: y,
-        left: x,
+        top: `${y}px`,
+        left: `${x}px`,
         zIndex: 9999
     };
 
@@ -81,3 +100,17 @@ export function ContextMenu({ x, y, onClose, actions }) {
         </div>
     );
 }
+
+ContextMenu.propTypes = {
+    x: PropTypes.number.isRequired,
+    y: PropTypes.number.isRequired,
+    onClose: PropTypes.func.isRequired,
+    actions: PropTypes.arrayOf(PropTypes.shape({
+        label: PropTypes.string,
+        icon: PropTypes.node,
+        onClick: PropTypes.func,
+        danger: PropTypes.bool,
+        disabled: PropTypes.bool,
+        divider: PropTypes.bool,
+    })).isRequired,
+};

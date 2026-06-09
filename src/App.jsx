@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import classNames from 'classnames';
-import { THEME_CLASSES, A11Y_CLASSES } from './constants';
 import { Sidebar } from './components/Sidebar';
 import { InstrumentSchedule } from './components/InstrumentSchedule';
 import { ChannelHookupReport } from './components/ChannelHookupReport';
@@ -16,8 +15,7 @@ import { CuttingListReport } from './components/CuttingListReport';
 import { EosTargetsReport } from './components/EosTargetsReport';
 import { PowerReport } from './components/PowerReport';
 import { PatchNotes } from './components/PatchNotes';
-import { db, seedDatabase, exportShow, importShow, createNewShow, importEosCsv, importLightwrightTxt, importMa2Xml, importMvr } from './db';
-import { exportToEosCsv, exportToLightwright, exportToGenericCsv } from './utils/dataExporters';
+import { db, exportShow, importShow, createNewShow, importEosCsv, importLightwrightTxt, importMa2Xml, importMvr } from './db';
 import { ToastProvider, useToast } from './components/Toast';
 import './index.css';
 
@@ -31,70 +29,15 @@ import { PrintCenter } from './components/PrintCenter';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { ExportWizardModal } from './components/ExportWizardModal';
 import { useSettings } from './hooks/useSettings';
+import { STORAGE_KEYS } from './constants';
 
 function App() {
   const [showModal, setShowModal] = React.useState(false);
   const [showSettings, setShowSettings] = React.useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
-  const [showImportWizard, setShowImportWizard] = React.useState(false);
   const [showImportModal, setShowImportModal] = React.useState(false);
 
-  useEffect(() => {
-    seedDatabase();
-  }, []);
-
-  // Apply theme and accessibility settings on mount and when settings change
-  useEffect(() => {
-
-    const applySettings = () => {
-      const theme = localStorage.getItem('theme') || 'dark';
-
-      // Remove all theme classes first
-      document.documentElement.classList.remove(...THEME_CLASSES);
-
-      if (theme === 'custom') {
-        // Apply custom theme CSS variables from localStorage
-        try {
-          const customColors = JSON.parse(localStorage.getItem('customTheme'));
-          if (customColors) {
-            Object.entries(customColors).forEach(([key, value]) => {
-              document.documentElement.style.setProperty(key, value);
-            });
-            document.documentElement.style.setProperty('--accent-hover', customColors['--accent-primary']);
-            document.documentElement.style.setProperty('--accent-text', '#ffffff');
-            document.documentElement.style.setProperty('--bg-hover', customColors['--bg-card']);
-            document.documentElement.style.setProperty('--border-subtle', customColors['--bg-card']);
-            document.documentElement.style.setProperty('--border-default', customColors['--text-secondary'] + '44');
-          }
-        } catch (e) { console.warn('Failed to parse custom theme:', e); }
-      } else if (theme !== 'dark') {
-        // Add the new theme class (dark uses default :root, no class needed)
-        document.documentElement.classList.add(theme);
-      }
-
-      // Apply accessibility classes
-      document.documentElement.classList.remove(...A11Y_CLASSES);
-      if (localStorage.getItem('dyslexicMode') === 'true') {
-        document.documentElement.classList.add('dyslexic-mode');
-      }
-      if (localStorage.getItem('reducedMotion') === 'true') {
-        document.documentElement.classList.add('reduced-motion');
-      }
-      if (localStorage.getItem('highContrast') === 'true') {
-        document.documentElement.classList.add('high-contrast');
-      }
-      if (localStorage.getItem('largeText') === 'true') {
-        document.documentElement.classList.add('large-text');
-      }
-    };
-
-    // Apply on mount
-    applySettings();
-
-    // Listen for settings changes
-    window.addEventListener('settingsChanged', applySettings);
-    return () => window.removeEventListener('settingsChanged', applySettings);
-  }, []);
+// Theme and accessibility now handled by external script themeScript.js
 
   const handleNewShow = () => {
     setShowModal(true);
@@ -131,30 +74,35 @@ function AppInner({ isSidebarOpen, setIsSidebarOpen, handleNewShow, handleImport
   const navigate = useNavigate();
 
   const handleSave = async () => {
-    const json = await exportShow();
+    try {
+      const json = await exportShow();
 
-    // Generate Filename: ShowName-YYYY-MM-DD-HHmm.lxlog
-    const metadata = await db.showMetadata.toArray();
-    const showName = (metadata[0] && metadata[0].name) ? metadata[0].name.replace(/[^a-z0-9]/gi, '_') : 'Untitled_Show';
+      // Generate Filename: ShowName-YYYY-MM-DD-HHmm.lxlog
+      const metadata = await db.showMetadata.toArray();
+      const showName = (metadata[0] && metadata[0].name) ? metadata[0].name.replace(/[^a-z0-9]/gi, '_') : 'Untitled_Show';
 
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
-    const timeStr = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-    const filename = `${showName}-${dateStr}-${timeStr}.lxlog`;
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
+      const timeStr = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
+      const filename = `${showName}-${dateStr}-${timeStr}.lxlog`;
 
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
 
-    // Increased timeout to ensure browser captures the download event
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
+      // Increased timeout to ensure browser captures the download event
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+    } catch (err) {
+      console.error("Failed to export show:", err);
+      toast.error("Failed to export show.");
+    }
   };
 
   const handleLoad = (e) => {
@@ -205,7 +153,6 @@ function AppInner({ isSidebarOpen, setIsSidebarOpen, handleNewShow, handleImport
           await db.showMetadata.update(existingMetadata[0].id, {
             name: showMetadata.name || existingMetadata[0].name,
             designer: showMetadata.designer || existingMetadata[0].designer,
-            venue: showMetadata.venue || existingMetadata[0].venue,
             assistant: showMetadata.assistant || existingMetadata[0].assistant,
             director: showMetadata.director || existingMetadata[0].director,
             producer: showMetadata.producer || existingMetadata[0].producer,
@@ -216,7 +163,6 @@ function AppInner({ isSidebarOpen, setIsSidebarOpen, handleNewShow, handleImport
           await db.showMetadata.add({
             name: showMetadata.name || '',
             designer: showMetadata.designer || '',
-            venue: showMetadata.venue || '',
             assistant: showMetadata.assistant || '',
             director: showMetadata.director || '',
             producer: showMetadata.producer || '',
@@ -239,8 +185,13 @@ function AppInner({ isSidebarOpen, setIsSidebarOpen, handleNewShow, handleImport
   };
 
   const handleCreateShow = async (metadata) => {
-    await createNewShow(metadata);
-    navigate('/app');
+    try {
+      await createNewShow(metadata);
+      navigate('/app');
+    } catch (err) {
+      console.error("Failed to create show:", err);
+      toast.error("Failed to create show.");
+    }
   };
 
   return (
@@ -248,7 +199,6 @@ function AppInner({ isSidebarOpen, setIsSidebarOpen, handleNewShow, handleImport
       <AppContent
         isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
-        handleLoad={handleLoad}
         handleSave={handleSave}
         handleNewShow={handleNewShow}
         handleImport={handleImport}
@@ -271,7 +221,7 @@ function AppInner({ isSidebarOpen, setIsSidebarOpen, handleNewShow, handleImport
 }
 
 // Separate component to use useLocation hook
-function AppContent({ isSidebarOpen, setIsSidebarOpen, handleLoad, handleSave, handleNewShow, handleImport, setShowSettings }) {
+function AppContent({ isSidebarOpen, setIsSidebarOpen, handleSave, handleNewShow, handleImport, setShowSettings }) {
   const location = useLocation();
   const isLandingPage = location.pathname === '/';
   const settings = useSettings();
@@ -298,10 +248,10 @@ function AppContent({ isSidebarOpen, setIsSidebarOpen, handleLoad, handleSave, h
 
   if (isLandingPage) {
     return (
-      <main className="w-full h-full overflow-y-auto bg-[#0f0f13]">
+      <main className="w-full h-full overflow-y-auto bg-[var(--bg-app)]">
         <Routes>
           <Route path="/" element={
-            localStorage.getItem('disableLanding') === 'true'
+            localStorage.getItem(STORAGE_KEYS.DISABLE_LANDING) === 'true'
               ? <Navigate to="/app" replace />
               : <LandingPage />
           } />
@@ -324,7 +274,7 @@ function AppContent({ isSidebarOpen, setIsSidebarOpen, handleLoad, handleSave, h
           </button>
 
           <div className="flex items-center gap-1.5">
-            <div className="w-8 h-8 bg-[var(--accent-primary)] rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20"><span className="ml-[2px] mb-[1px]">L</span></div>
+            <img src="/lxlog_logo_final.png" alt="LXLog Logo" className="w-8 h-8 rounded-lg shadow-lg shadow-indigo-500/20" />
             <span className="font-semibold text-lg text-[var(--text-primary)]">LX<span className="text-[var(--text-tertiary)] font-normal">Log</span></span>
           </div>
 

@@ -1,36 +1,17 @@
 <!doctype html>
 <html lang="en">
-
-<meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy"
-  content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.cdnfonts.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com https://fonts.cdnfonts.com; connect-src 'self' ws://localhost:* http://localhost:* data:; worker-src 'self' blob:;" />
-<link rel="icon" type="image/svg+xml" href="/vite.svg" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>LXLog</title>
-<script>
-  try {
-    var theme = localStorage.getItem('theme') || 'dark';
-    if (theme === 'custom') {
-      var customColors = JSON.parse(localStorage.getItem('customTheme'));
-      if (customColors) {
-        for (var key in customColors) {
-          document.documentElement.style.setProperty(key, customColors[key]);
-        }
-        document.documentElement.style.setProperty('--accent-hover', customColors['--accent-primary']);
-        document.documentElement.style.setProperty('--accent-text', '#ffffff');
-        document.documentElement.style.setProperty('--bg-hover', customColors['--bg-card']);
-        document.documentElement.style.setProperty('--border-subtle', customColors['--bg-card']);
-        document.documentElement.style.setProperty('--border-default', customColors['--text-secondary'] + '44');
-      }
-    } else if (theme !== 'dark') {
-      document.documentElement.classList.add(theme);
-    }
-  } catch (e) {}
-</script>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.cdnfonts.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com https://fonts.cdnfonts.com; connect-src 'self' ws://localhost:* http://localhost:* data:; worker-src 'self' blob:;" />
+  <link rel="icon" id="favicon" type="image/png" href="/favicon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LXLog</title>
 </head>
 
 <body>
   <div id="root"></div>
+  <!-- External theme initialization script -->
+  <script type="module" src="/src/theme/themeScript.js"></script>
   <script type="module" src="/src/main.jsx"></script>
 </body>
 

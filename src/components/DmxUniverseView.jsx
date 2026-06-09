@@ -42,14 +42,7 @@ export function DmxUniverseView() {
             }
 
             // Determine Footprint (default 1)
-            // TODO: In future, get actual footprint from Library if linked
-            // For now, try to guess or default to 1
-            // If we have access to linked fixtures we could look up footprint.
-            // Since this component reads from raw instruments, we don't have linked fixture data easily 
-            // without joining with fixtureLibrary.
-
-            // Let's rely on stored footprint if we ever add it, or default to 1.
-            // Actually, we can fetch fixtureLibrary too.
+            // TODO: Retrieve footprint from linked library instead of raw instrument property.
             const footprint = inst.dmxFootprint ? parseInt(inst.dmxFootprint) : 1;
 
             for (let i = 0; i < footprint; i++) {
@@ -153,7 +146,6 @@ export function DmxUniverseView() {
                         const isHovered = hoveredAddress === cell.address;
                         const hasData = !!cell.data;
                         const isOverlap = cell.data?.overlap;
-                        const isStart = cell.data?.type === 'start';
 
                         let bgClass = 'bg-[var(--bg-panel)]';
                         if (hasData) {

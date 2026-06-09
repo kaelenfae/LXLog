@@ -1,5 +1,5 @@
 import React from 'react';
-import classNames from 'classnames';
+import PropTypes from 'prop-types';
 
 export function FilterModal({
     onClose,
@@ -167,3 +167,23 @@ export function FilterModal({
         </div>
     );
 }
+
+FilterModal.propTypes = {
+    onClose: PropTypes.func.isRequired,
+    filters: PropTypes.shape({
+        type: PropTypes.string,
+        position: PropTypes.string,
+        color: PropTypes.string,
+        gobo: PropTypes.string,
+        missingAddress: PropTypes.bool,
+        missingChannel: PropTypes.bool,
+        duplicates: PropTypes.bool,
+        incompleteOnly: PropTypes.bool,
+        searchQuery: PropTypes.string,
+    }).isRequired,
+    setFilters: PropTypes.func.isRequired,
+    types: PropTypes.arrayOf(PropTypes.string).isRequired,
+    positions: PropTypes.arrayOf(PropTypes.string).isRequired,
+    colors: PropTypes.arrayOf(PropTypes.string).isRequired,
+    gobos: PropTypes.arrayOf(PropTypes.string).isRequired,
+};

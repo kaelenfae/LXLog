@@ -1,16 +1,74 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { db, ensureGenericFixture } from '../db';
 import { parseGdtfFile, importGdtfToLibrary, deleteFixtureFromLibrary } from '../utils/gdtfParser';
 import { FixtureDetailModal } from './FixtureDetailModal';
+import { useToast } from './Toast';
 
 export function FixtureLibrary() {
+    const toast = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [importing, setImporting] = useState(false);
+    const [generating, setGenerating] = useState(false);
     const [selectedFixture, setSelectedFixture] = useState(null);
     const [error, setError] = useState(null);
     const [pendingDeleteId, setPendingDeleteId] = useState(null);
     const fileInputRef = useRef(null);
+
+    const handleLoadAllTypes = async () => {
+        setGenerating(true);
+        setError(null);
+        try {
+            const insts = await db.instruments.toArray();
+            const uniqueTypes = [...new Set(insts.map(inst => inst.type?.trim()).filter(Boolean))];
+            
+            if (uniqueTypes.length === 0) {
+                toast.info('No instrument types found in the active schedule.');
+                return;
+            }
+
+            let loadedCount = 0;
+            let updatedCount = 0;
+
+            await db.transaction('rw', db.instruments, db.fixtureLibrary, async () => {
+                for (const type of uniqueTypes) {
+                    const existing = await db.fixtureLibrary.filter(f => 
+                        (f.name || '').toLowerCase() === type.toLowerCase() ||
+                        (f.shortName || '').toLowerCase() === type.toLowerCase()
+                    ).first();
+
+                    let fixtureTypeId;
+                    if (existing) {
+                        fixtureTypeId = existing.fixtureTypeId;
+                    } else {
+                        fixtureTypeId = await ensureGenericFixture(type);
+                        loadedCount++;
+                    }
+
+                    if (fixtureTypeId) {
+                        const matchingInsts = insts.filter(inst => (inst.type || '').trim().toLowerCase() === type.toLowerCase());
+                        for (const inst of matchingInsts) {
+                            if (inst.fixtureTypeId !== fixtureTypeId) {
+                                await db.instruments.update(inst.id, { fixtureTypeId });
+                                updatedCount++;
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (loadedCount > 0) {
+                toast.success(`Generated ${loadedCount} new fixture profile(s) from schedule.`);
+            } else {
+                toast.info('All schedule fixture types already exist in the library.');
+            }
+        } catch (err) {
+            console.error('Failed to load types from schedule:', err);
+            toast.error('Failed to generate fixture profiles.');
+        } finally {
+            setGenerating(false);
+        }
+    };
 
     // Load fixtures from database
     const allFixtures = useLiveQuery(() => db.fixtureLibrary.toArray()) || [];
@@ -113,6 +171,20 @@ export function FixtureLibrary() {
                             Clear All
                         </button>
                         <button
+                            onClick={handleLoadAllTypes}
+                            disabled={generating || importing}
+                            className="flex items-center gap-2 px-3 py-1.5 border border-[var(--border-default)] text-[var(--text-primary)] text-xs font-bold uppercase tracking-wider rounded-md hover:bg-[var(--bg-hover)] transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {generating ? (
+                                <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            ) : (
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                            )}
+                            Load Schedule Types
+                        </button>
+                        <button
                             onClick={() => fileInputRef.current?.click()}
                             disabled={importing}
                             className="flex items-center gap-2 px-3 py-1.5 bg-[var(--accent-primary)] text-white text-xs font-bold uppercase tracking-wider rounded-md hover:bg-[var(--accent-hover)] transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -135,16 +207,19 @@ export function FixtureLibrary() {
                 </div>
 
                 {/* Search */}
-                <div className="relative">
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
+                <div className="relative flex items-center">
+                    <div className="absolute left-3 flex items-center justify-center pointer-events-none text-[var(--text-tertiary)]">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
                     <input
                         type="text"
                         placeholder="Search by name or manufacturer..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                        style={{ paddingLeft: '32px' }}
+                        className="w-full pr-4 py-2 bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-primary)]"
                     />
                 </div>
 
@@ -182,9 +257,16 @@ export function FixtureLibrary() {
                                         <h3 className="font-medium text-[var(--text-primary)] truncate" title={fixture.name}>
                                             {fixture.name}
                                         </h3>
-                                        <p className="text-sm text-[var(--text-secondary)] truncate">
-                                            {fixture.manufacturer}
-                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-sm text-[var(--text-secondary)] truncate">
+                                                {fixture.manufacturer}
+                                            </p>
+                                            {fixture.isGeneric && (
+                                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                                    Generic
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <button
                                         onClick={(e) => {

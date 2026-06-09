@@ -28,31 +28,33 @@ const SECTION_STYLES = {
     Sub: { bg: '#d97706', border: '#f59e0b' },
 };
 
-export const EosTargetsPDF = ({ showInfo, groups, presets, subs, includeCover = true, orientation = 'portrait', standalone = true }) => {
-    const TargetSection = ({ title, items, type }) => {
-        if (!items || items.length === 0) return null;
-        const palette = SECTION_STYLES[type];
-        return (
-            <View style={{ marginBottom: 12 }}>
-                <View style={[styles.sectionHeader, { backgroundColor: palette.bg }]}>
-                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#fff', textTransform: 'uppercase', letterSpacing: 1 }}>
-                        {title}  ({items.length})
-                    </Text>
-                </View>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                    {items.map((target, idx) => (
-                        <View key={`${type}-${target.targetId}-${idx}`} style={[styles.card, { borderColor: palette.border }]}>
-                            <Text style={{ fontSize: 12, fontWeight: 'bold' }}>{target.targetId}</Text>
-                            {target.label ? (
-                                <Text style={{ fontSize: 6, color: '#4b5563', marginTop: 2, textAlign: 'center' }}>{target.label}</Text>
-                            ) : null}
-                        </View>
-                    ))}
-                </View>
+// Defined outside EosTargetsPDF so React does not recreate it as a new
+// component reference on every render (fixes react-hooks/static-components).
+const TargetSection = ({ title, items, type }) => {
+    if (!items || items.length === 0) return null;
+    const palette = SECTION_STYLES[type];
+    return (
+        <View style={{ marginBottom: 12 }}>
+            <View style={[styles.sectionHeader, { backgroundColor: palette.bg }]}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#fff', textTransform: 'uppercase', letterSpacing: 1 }}>
+                    {title}  ({items.length})
+                </Text>
             </View>
-        );
-    };
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {items.map((target, idx) => (
+                    <View key={`${type}-${target.targetId}-${idx}`} style={[styles.card, { borderColor: palette.border }]}>
+                        <Text style={{ fontSize: 12, fontWeight: 'bold' }}>{target.targetId}</Text>
+                        {target.label ? (
+                            <Text style={{ fontSize: 6, color: '#4b5563', marginTop: 2, textAlign: 'center' }}>{target.label}</Text>
+                        ) : null}
+                    </View>
+                ))}
+            </View>
+        </View>
+    );
+};
 
+export const EosTargetsPDF = ({ showInfo, groups, presets, subs, includeCover = true, orientation = 'portrait', standalone = true }) => {
     const pages = (
         <>
             {standalone && includeCover && <PDFCoverPage showInfo={showInfo} reportTitle="EOS Targets" />}

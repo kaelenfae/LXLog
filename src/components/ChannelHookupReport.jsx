@@ -1,15 +1,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
+import { useToast } from './Toast';
 import { ReportLayout } from './ReportLayout';
+import { sortInstrumentsByChannel, processChannelDisplayOptions } from '../utils/channelUtils';
 import { ConfigureColumnsButton, ConfigureColumnsHeader, DraggableColumnItem } from './ConfigureColumns';
 import { useSettings } from '../hooks/useSettings';
 import { formatAddress } from '../utils/addressFormatter';
-import { getGelColor } from '../utils/gelData';
 import { ChannelHookupPDF } from './ChannelHookupPDF';
 import { useShowInfo } from '../hooks/useShowInfo';
 import { PDFDownloadButton } from './PDFDownloadButton';
 import { OrientationSelect } from './OrientationSelect';
+import { ColorSwatch } from './ColorSwatch';
+import { STORAGE_KEYS } from '../constants';
 
 const AVAILABLE_COLUMNS = [
     { id: 'channel', label: 'Channel', width: 'w-16 text-right pr-4', locked: true },
@@ -22,7 +25,7 @@ const AVAILABLE_COLUMNS = [
 ];
 
 const DEFAULT_COLUMN_ORDER = AVAILABLE_COLUMNS.map(c => c.id);
-const DEFAULT_VISIBLE_COLUMNS = AVAILABLE_COLUMNS.map(c => c.id);
+const DEFAULT_VISIBLE_COLUMNS = AVAILABLE_COLUMNS.reduce((acc, c) => ({ ...acc, [c.id]: true }), {});
 
 export function ChannelHookupReport() {
     const [orientation, setOrientation] = useState('portrait');
@@ -33,56 +36,49 @@ export function ChannelHookupReport() {
 
     // Column configuration state
     const [columnOrder, setColumnOrder] = useState(() => {
-        const saved = localStorage.getItem('channelHookup_columnOrder');
-        return saved ? JSON.parse(saved) : DEFAULT_COLUMN_ORDER;
+        const saved = localStorage.getItem(STORAGE_KEYS.CHANNEL_HOOKUP_COLUMN_ORDER);
+        try {
+            return saved ? JSON.parse(saved) : DEFAULT_COLUMN_ORDER;
+        } catch (e) {
+            console.warn('Failed to parse channelHookup_columnOrder', e);
+            return DEFAULT_COLUMN_ORDER;
+        }
     });
 
     const [visibleColumns, setVisibleColumns] = useState(() => {
-        const saved = localStorage.getItem('channelHookup_visibleColumns');
-        return saved ? new Set(JSON.parse(saved)) : new Set(DEFAULT_VISIBLE_COLUMNS);
+        const saved = localStorage.getItem(STORAGE_KEYS.CHANNEL_HOOKUP_VISIBLE_COLUMNS);
+        try {
+            if (!saved) return DEFAULT_VISIBLE_COLUMNS;
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+                return parsed.reduce((acc, col) => ({ ...acc, [col]: true }), {});
+            }
+            return { ...DEFAULT_VISIBLE_COLUMNS, ...parsed };
+        } catch (e) {
+            console.warn('Failed to parse channelHookup_visibleColumns', e);
+            return DEFAULT_VISIBLE_COLUMNS;
+        }
     });
 
     const [draggedColumn, setDraggedColumn] = useState(null);
 
     // Persist to localStorage
     useEffect(() => {
-        localStorage.setItem('channelHookup_columnOrder', JSON.stringify(columnOrder));
+        localStorage.setItem(STORAGE_KEYS.CHANNEL_HOOKUP_COLUMN_ORDER, JSON.stringify(columnOrder));
     }, [columnOrder]);
 
     useEffect(() => {
-        localStorage.setItem('channelHookup_visibleColumns', JSON.stringify([...visibleColumns]));
+        localStorage.setItem(STORAGE_KEYS.CHANNEL_HOOKUP_VISIBLE_COLUMNS, JSON.stringify(visibleColumns));
     }, [visibleColumns]);
 
     const instruments = useLiveQuery(async () => {
         const all = await db.instruments.toArray();
-        return all.sort((a, b) => {
-            const chanA = parseFloat(a.channel) || 0;
-            const chanB = parseFloat(b.channel) || 0;
-            if (chanA !== chanB) return chanA - chanB;
-            return (a.part || 1) - (b.part || 1);
-        });
+        return sortInstrumentsByChannel(all);
     });
 
     const processedData = useMemo(() => {
         if (!instruments) return [];
-
-        let lastChannel = null;
-        return instruments.map(inst => {
-            const item = { ...inst };
-            const isSecondary = item.channel === lastChannel;
-            item.isSecondaryPart = isSecondary;
-
-            if (isSecondary) {
-                if (channelDisplayMode === 'parts') item.displayChannel = `P${item.part || 1}`;
-                else if (channelDisplayMode === 'dots') item.displayChannel = `.${item.part || 1}`;
-                else if (channelDisplayMode === 'hide') item.displayChannel = '';
-                else item.displayChannel = item.channel; // Show Dups
-            } else {
-                item.displayChannel = item.channel || '-';
-                lastChannel = item.channel;
-            }
-            return item;
-        });
+        return processChannelDisplayOptions(instruments, channelDisplayMode);
     }, [instruments, channelDisplayMode]);
 
     const handleDragStart = (e, columnId) => {
@@ -117,18 +113,15 @@ export function ChannelHookupReport() {
 
     const toggleColumnVisibility = (columnId) => {
         if (columnId === 'channel') return; // Channel cannot be hidden
-        const newVisible = new Set(visibleColumns);
-        if (newVisible.has(columnId)) {
-            newVisible.delete(columnId);
-        } else {
-            newVisible.add(columnId);
-        }
-        setVisibleColumns(newVisible);
+        setVisibleColumns(prev => ({
+            ...prev,
+            [columnId]: !prev[columnId]
+        }));
     };
 
     const resetColumns = () => {
         setColumnOrder(DEFAULT_COLUMN_ORDER);
-        setVisibleColumns(new Set(DEFAULT_VISIBLE_COLUMNS));
+        setVisibleColumns(DEFAULT_VISIBLE_COLUMNS);
     };
 
     const renderCellContent = (inst, columnId) => {
@@ -157,14 +150,16 @@ export function ChannelHookupReport() {
                 return <td className="py-1 px-2 font-semibold">{inst.position}</td>;
             case 'color':
                 return (
-                    <td className="py-1 flex items-center gap-1.5">
-                        {showSwatches && inst.color && (
-                            <span className="w-2.5 h-2.5 rounded-full border border-gray-300 shrink-0" style={{ backgroundColor: getGelColor(inst.color) || 'transparent' }}></span>
-                        )}
-                        <span className="truncate">{inst.color}</span>
+                    <td className="py-1">
+                        <div className="flex items-center gap-1.5">
+                            {showSwatches && inst.color && (
+                                <ColorSwatch color={inst.color} className="w-4 h-4 shrink-0" rounded="rounded-full" />
+                            )}
+                            <span className="truncate">{inst.color}</span>
+                        </div>
                     </td>
                 );
-            default:
+            default: {
                 // Check for dynamic custom field
                 const colDef = AVAILABLE_COLUMNS.find(c => c.id === columnId);
                 if (colDef && colDef.isCustom) {
@@ -172,10 +167,11 @@ export function ChannelHookupReport() {
                 }
                 // Fallback for generic property access if it matches an object key
                 return <td className="py-1 px-2 text-gray-400">{inst[columnId] || ''}</td>;
+            }
         }
     };
 
-    const visibleColumnOrder = columnOrder.filter(id => visibleColumns.has(id));
+    const visibleColumnOrder = columnOrder.filter(id => visibleColumns[id]);
 
     const controls = (
         <div className="flex gap-4 items-center bg-gray-100 p-2 rounded text-xs text-black border border-gray-300">
@@ -219,7 +215,7 @@ export function ChannelHookupReport() {
                                 key={columnId}
                                 columnId={columnId}
                                 label={column.label}
-                                isVisible={visibleColumns.has(columnId)}
+                                isVisible={!!visibleColumns[columnId]}
                                 isDragging={draggedColumn === columnId}
                                 isLocked={column.locked}
                                 onToggle={() => toggleColumnVisibility(columnId)}
@@ -247,6 +243,7 @@ export function ChannelHookupReport() {
                     visibleColumnOrder={visibleColumnOrder}
                     orientation={orientation}
                     includeCover={includeCover}
+                    showSwatches={showSwatches}
                 />
             }
             fileName={`${(showInfo.name || 'Show').replace(/\s+/g, '_')}_ChannelHookup.pdf`}

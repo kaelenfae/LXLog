@@ -256,6 +256,13 @@ export async function parseGdtfFile(gdtfFile) {
                                 splitChannels: [], 
                                 functions: channelFunctions
                             });
+                        } else {
+                            const existing = resolvedAddresses.get(offset);
+                            existing.splitChannels.push({
+                                attribute: primaryAttr,
+                                prettyAttribute: (attrMap[primaryAttr]?.pretty || primaryAttr) + suffix,
+                                functions: channelFunctions
+                            });
                         }
                     });
                 });
@@ -324,7 +331,13 @@ export async function parseGdtfFile(gdtfFile) {
 }
 
 export async function importGdtfToLibrary(db, fixtureData) {
-    const fixtureTypeId = fixtureData.id || `${fixtureData.manufacturer}_${fixtureData.name}`.replace(/\s+/g, '_');
+    const fixtureTypeId = fixtureData.fixtureTypeId || `${fixtureData.manufacturer}_${fixtureData.name}`.replace(/\s+/g, '_');
+    
+    let cleanedModes = fixtureData.dmxModes || [];
+    if (cleanedModes.length > 1) {
+        cleanedModes = cleanedModes.filter(m => (m.name || '').toLowerCase() !== 'default');
+    }
+
     const record = {
         fixtureTypeId,
         name: fixtureData.name,
@@ -333,7 +346,7 @@ export async function importGdtfToLibrary(db, fixtureData) {
         description: fixtureData.description,
         wattage: fixtureData.wattage,
         weight: fixtureData.weight,
-        dmxModes: fixtureData.dmxModes,
+        dmxModes: cleanedModes,
         wheels: fixtureData.wheels,
         thumbnailBlob: fixtureData.thumbnailBlob || null,
         rawXml: fixtureData.rawXml,

@@ -1,19 +1,126 @@
 import Dexie from 'dexie';
 import { parseGdtfFile, importGdtfToLibrary } from './utils/gdtfParser';
+import { STORAGE_KEYS } from './constants';
 
 export const db = new Dexie('LightingDB');
 
-// Bump version to add fixtureLibrary for GDTF support
-// Bump version to add table for Notes
+// v15: fixtureLibrary + instrumentNotes
+// v16: added gelFrameSize index
+// v17: added x, y, z, distance coordinates to instruments
 db.version(15).stores({
     instruments: '++id, channel, [channel+part], address, position, type, purpose, watt, color, part, unit, gobo, accessory, proportion, curve, notes, fixtureTypeId, dmxMode, text1, text2, text3, text4, text5, text6, text7, text8, text9, text10',
     showMetadata: '++id, name',
     eosTargets: '++id, targetType, targetId, label, channels',
     fixtureLibrary: '++id, fixtureTypeId, name, manufacturer, shortName',
-    instrumentNotes: '++id, instrumentId, timestamp, type' // type: 'user' | 'system'
-}).upgrade(tx => {
-    // No migration needed
+    instrumentNotes: '++id, instrumentId, timestamp, type'
 });
+
+db.version(16).stores({
+    instruments: '++id, channel, [channel+part], address, position, type, purpose, watt, color, part, unit, gobo, accessory, proportion, curve, notes, fixtureTypeId, dmxMode, gelFrameSize, text1, text2, text3, text4, text5, text6, text7, text8, text9, text10',
+    showMetadata: '++id, name',
+    eosTargets: '++id, targetType, targetId, label, channels',
+    fixtureLibrary: '++id, fixtureTypeId, name, manufacturer, shortName',
+    instrumentNotes: '++id, instrumentId, timestamp, type'
+});
+
+db.version(17).stores({
+    instruments: '++id, channel, [channel+part], address, position, type, purpose, watt, color, part, unit, gobo, accessory, proportion, curve, notes, fixtureTypeId, dmxMode, gelFrameSize, text1, text2, text3, text4, text5, text6, text7, text8, text9, text10, x, y, z, distance',
+    showMetadata: '++id, name',
+    eosTargets: '++id, targetType, targetId, label, channels',
+    fixtureLibrary: '++id, fixtureTypeId, name, manufacturer, shortName',
+    instrumentNotes: '++id, instrumentId, timestamp, type'
+});
+
+// Clean up duplicate default DMX modes and fix instruments that have mismatched default mode
+db.on('ready', async () => {
+    try {
+        const fixtures = await db.fixtureLibrary.toArray();
+        const fixtureMap = new Map();
+        
+        for (const fixture of fixtures) {
+            let cleanedModes = fixture.dmxModes || [];
+            if (cleanedModes.length > 1) {
+                const hasDefault = cleanedModes.some(m => (m.name || '').toLowerCase() === 'default');
+                if (hasDefault) {
+                    cleanedModes = cleanedModes.filter(m => (m.name || '').toLowerCase() !== 'default');
+                    await db.fixtureLibrary.update(fixture.id, { dmxModes: cleanedModes });
+                }
+            }
+            fixtureMap.set(fixture.fixtureTypeId, cleanedModes);
+        }
+
+        const instruments = await db.instruments.toArray();
+        for (const inst of instruments) {
+            if (inst.fixtureTypeId) {
+                const modes = fixtureMap.get(inst.fixtureTypeId);
+                if (modes && modes.length > 0) {
+                    const hasCurrentMode = modes.some(m => m.name === inst.dmxMode);
+                    if (!hasCurrentMode) {
+                        const newMode = modes[0].name;
+                        const newFootprint = modes[0].footprint || inst.dmxFootprint;
+                        await db.instruments.update(inst.id, {
+                            dmxMode: newMode,
+                            dmxFootprint: newFootprint
+                        });
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Failed to clean up duplicate default DMX modes:', err);
+    }
+});
+
+/**
+ * Parse a single CSV line respecting quoted fields.
+ * Handles commas inside double-quoted values and escaped quotes ("").
+ */
+const parseCsvLine = (line) => {
+    const fields = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuotes) {
+            if (ch === '"') {
+                if (i + 1 < line.length && line[i + 1] === '"') {
+                    current += '"';
+                    i++;
+                } else {
+                    inQuotes = false;
+                }
+            } else {
+                current += ch;
+            }
+        } else {
+            if (ch === '"') {
+                inQuotes = true;
+            } else if (ch === ',') {
+                fields.push(current.trim());
+                current = '';
+            } else {
+                current += ch;
+            }
+        }
+    }
+    fields.push(current.trim());
+    return fields;
+};
+
+/**
+ * Helper to assign sequential part numbers to identical channel strings.
+ * Updates the provided channelCounts object in place.
+ */
+const assignPartNumber = (channelVal, channelCounts) => {
+    if (!channelVal) return 1;
+    const channelKey = `channel_${channelVal}`;
+    if (!channelCounts[channelKey]) {
+        channelCounts[channelKey] = 1;
+    } else {
+        channelCounts[channelKey]++;
+    }
+    return channelCounts[channelKey];
+};
 
 export const addNote = async (instrumentId, text, type = 'user') => {
     return await db.instrumentNotes.add({
@@ -25,11 +132,56 @@ export const addNote = async (instrumentId, text, type = 'user') => {
 };
 
 export const getInstrumentNotes = async (instrumentId) => {
-    return await db.instrumentNotes
+    const notes = await db.instrumentNotes
         .where('instrumentId')
         .equals(Number(instrumentId))
-        .reverse()
-        .sortBy('timestamp');
+        .toArray();
+    return notes.sort((a, b) => b.timestamp - a.timestamp);
+};
+
+export const ensureGenericFixture = async (typeString) => {
+    if (!typeString || typeof typeString !== 'string') return null;
+    
+    // Check if any fixture in the library matches this name (case-insensitive)
+    const existing = await db.fixtureLibrary.filter(f => 
+        (f.name || '').toLowerCase() === typeString.toLowerCase() ||
+        (f.shortName || '').toLowerCase() === typeString.toLowerCase()
+    ).first();
+    
+    if (existing) return existing.fixtureTypeId;
+
+    // Create a new generic fixture
+    const fixtureTypeId = crypto.randomUUID();
+    await db.fixtureLibrary.add({
+        fixtureTypeId,
+        name: typeString,
+        manufacturer: 'Generic',
+        shortName: typeString,
+        dmxModes: [{
+            name: 'Default',
+            footprint: 1,
+            channels: [{
+                index: 1,
+                attribute: 'Dimmer',
+                prettyAttribute: 'Dimmer',
+                resolution: '8bit',
+                allOffsets: [1],
+                splitChannels: [],
+                functions: [{
+                    name: 'Dimmer',
+                    attr: 'Dimmer',
+                    prettyAttr: 'Dimmer',
+                    from: '0',
+                    to: '255'
+                }]
+            }]
+        }],
+        wattage: 0,
+        isGeneric: true,
+        importedAt: new Date().toISOString()
+    });
+
+    return fixtureTypeId;
 };
 
 /**
@@ -48,9 +200,24 @@ export const saveInstruments = async (instruments, options = { merge: false, pre
                 await db.fixtureLibrary.clear();
             }
             await db.instrumentNotes.clear();
+
+            // Auto-populate fixtureTypeId and add custom types to the library
+            for (const inst of instruments) {
+                if (inst.type && !inst.fixtureTypeId) {
+                    const fixtureTypeId = await ensureGenericFixture(inst.type);
+                    if (fixtureTypeId) inst.fixtureTypeId = fixtureTypeId;
+                }
+            }
+
             await db.instruments.bulkAdd(instruments);
         } else {
             for (const inst of instruments) {
+                // Auto-populate fixtureTypeId and add custom types to the library
+                if (inst.type && !inst.fixtureTypeId) {
+                    const fixtureTypeId = await ensureGenericFixture(inst.type);
+                    if (fixtureTypeId) inst.fixtureTypeId = fixtureTypeId;
+                }
+
                 // Match by Channel AND Part if available, otherwise just Channel
                 // This ensures we update the correct part if multi-part instruments are being merged
                 const query = inst.part
@@ -124,10 +291,6 @@ export const renumberPosition = async (position, sortedIds) => {
     });
 };
 
-// Helper to seed data if empty
-export const seedDatabase = async () => {
-    // Disabled for production/manual save-load workflow
-};
 
 export const exportShow = async () => {
     const instruments = await db.instruments.toArray();
@@ -147,6 +310,34 @@ export const exportShow = async () => {
     return JSON.stringify(showData, null, 2);
 };
 
+// Allowed fields for instrument records to prevent storing arbitrary properties
+const INSTRUMENT_FIELDS = new Set([
+    'channel', 'address', 'type', 'position', 'purpose', 'color', 'watt',
+    'unit', 'gobo', 'accessory', 'notes', 'part', 'proportion', 'curve',
+    'text1', 'text2', 'text3', 'text4', 'text5', 'text6', 'text7', 'text8',
+    'text9', 'text10', 'fixtureTypeId', 'dmxMode', 'dmxFootprint',
+    'gelFrameSize', 'weight', 'x', 'y', 'z', 'distance', 'circuit',
+    'dimmer', 'customFields'
+]);
+
+const sanitizeInstrument = (raw) => {
+    const clean = {};
+    for (const key of Object.keys(raw)) {
+        if (INSTRUMENT_FIELDS.has(key)) clean[key] = raw[key];
+    }
+    return clean;
+};
+
+export const clearAllTables = async () => {
+    await db.transaction('rw', [db.instruments, db.showMetadata, db.eosTargets, db.fixtureLibrary, db.instrumentNotes], async () => {
+        await db.instruments.clear();
+        await db.eosTargets.clear();
+        await db.fixtureLibrary.clear();
+        await db.instrumentNotes.clear();
+        await db.showMetadata.clear();
+    });
+};
+
 export const importShow = async (jsonString) => {
     try {
         const data = JSON.parse(jsonString);
@@ -154,15 +345,14 @@ export const importShow = async (jsonString) => {
             throw new Error("Invalid show file format");
         }
 
+        const sanitizedInstruments = data.instruments.map(sanitizeInstrument);
+
         await db.transaction('rw', [db.instruments, db.showMetadata, db.eosTargets, db.fixtureLibrary, db.instrumentNotes], async () => {
             // Clear all tables once upfront
-            await db.instruments.clear();
-            await db.eosTargets.clear();
-            await db.fixtureLibrary.clear();
-            await db.instrumentNotes.clear();
-            await db.showMetadata.clear();
+            await clearAllTables();
 
-            await db.instruments.bulkAdd(data.instruments);
+
+            await db.instruments.bulkAdd(sanitizedInstruments);
 
             // Restore additional tables if present (v2+ format)
             if (data.eosTargets && Array.isArray(data.eosTargets) && data.eosTargets.length > 0) {
@@ -187,15 +377,7 @@ export const importShow = async (jsonString) => {
     }
 };
 
-export const resetShow = async () => {
-    await db.transaction('rw', [db.instruments, db.showMetadata, db.eosTargets, db.fixtureLibrary, db.instrumentNotes], async () => {
-        await db.instruments.clear();
-        await db.eosTargets.clear();
-        await db.fixtureLibrary.clear();
-        await db.instrumentNotes.clear();
-        await db.showMetadata.clear();
-    });
-};
+export const resetShow = clearAllTables;
 
 /**
  * Delete instruments by ID and cascade-delete their associated notes.
@@ -209,14 +391,8 @@ export const deleteInstruments = async (ids) => {
 };
 
 export const createNewShow = async (metadata) => {
-    await db.transaction('rw', [db.instruments, db.showMetadata, db.eosTargets, db.fixtureLibrary, db.instrumentNotes], async () => {
-        await db.instruments.clear();
-        await db.eosTargets.clear();
-        await db.fixtureLibrary.clear();
-        await db.instrumentNotes.clear();
-        await db.showMetadata.clear();
-        await db.showMetadata.add(metadata);
-    });
+    await clearAllTables();
+    await db.showMetadata.add(metadata);
 };
 
 export const importEosCsv = async (csvString, merge = false) => {
@@ -233,13 +409,13 @@ export const importEosCsv = async (csvString, merge = false) => {
         // Only parse channels if the section exists
         if (startIndex !== -1 && endIndex !== -1) {
             const headerLine = lines[startIndex + 1];
-            const headers = headerLine.split(',').map(h => h.trim());
+            const headers = parseCsvLine(headerLine);
 
             for (let i = startIndex + 2; i < endIndex; i++) {
                 const line = lines[i];
                 if (!line.trim()) continue;
 
-                const values = line.split(',');
+                const values = parseCsvLine(line);
                 const datum = {};
                 headers.forEach((header, index) => {
                     datum[header] = values[index];
@@ -249,15 +425,19 @@ export const importEosCsv = async (csvString, merge = false) => {
                 const channelNum = parseInt(channelStr, 10);
                 const channelVal = isNaN(channelNum) ? channelStr : channelNum;
 
-                const invalidKey = `channel_${channelVal}`;
-                let part = 0;
-                if (!channelCounts[invalidKey]) {
-                    channelCounts[invalidKey] = 1;
-                    part = 1;
-                } else {
-                    channelCounts[invalidKey]++;
-                    part = channelCounts[invalidKey];
-                }
+                const part = assignPartNumber(channelVal, channelCounts);
+
+                const parseCoord = (valStr, isZ = false) => {
+                    const fallback = isZ ? (localStorage.getItem(STORAGE_KEYS.DEFAULT_GRID_HEIGHT) || '') : '';
+                    if (valStr === undefined || valStr === null || valStr.trim() === '') return fallback;
+                    const num = parseFloat(valStr);
+                    if (isNaN(num) || num === 0) return fallback;
+                    return num;
+                };
+
+                const xCoord = parseCoord(datum['Location_X']);
+                const yCoord = parseCoord(datum['Location_Y']);
+                const zCoord = parseCoord(datum['Location_Z'], true);
 
                 instruments.push({
                     channel: channelVal,
@@ -280,7 +460,11 @@ export const importEosCsv = async (csvString, merge = false) => {
                     text7: datum['TEXT7'],
                     text8: datum['TEXT8'],
                     text9: datum['TEXT9'],
-                    text10: datum['TEXT10']
+                    text10: datum['TEXT10'],
+                    x: xCoord,
+                    y: yCoord,
+                    z: zCoord,
+                    distance: xCoord
                 });
             }
         }
@@ -331,11 +515,10 @@ export const importEosCsv = async (csvString, merge = false) => {
         // === Save to Database ===
         // Use shared saveInstruments for merge logic, handle EOS targets separately
         await db.transaction('rw', [db.instruments, db.eosTargets, db.fixtureLibrary, db.instrumentNotes], async () => {
-            if (!merge) {
-                await db.eosTargets.clear();
-            }
+            // Always clear and re-add targets to prevent duplicates on re-import
+            await db.eosTargets.clear();
 
-            // Save EOS targets (always add, no merge logic for targets)
+            // Save EOS targets
             if (eosTargets.length > 0) {
                 await db.eosTargets.bulkAdd(eosTargets);
             }
@@ -455,23 +638,10 @@ export const importLightwrightTxt = async (txtString, merge = false, selectedFie
             const channelNum = parseInt(channelStr, 10);
             const channelVal = isNaN(channelNum) ? channelStr : channelNum;
 
-            // Skip invalid rows without minimal info? Or just keep them? 
-            // Existing logic kept everything with a channel or even without?
-            // Let's assume everything needs a generic structure
-
-            const invalidKey = `channel_${channelVal}`;
-            let part = 0;
-            if (!channelCounts[invalidKey]) {
-                channelCounts[invalidKey] = 1;
-                part = 1;
-            } else {
-                channelCounts[invalidKey]++;
-                part = channelCounts[invalidKey];
-            }
+            const part = assignPartNumber(channelVal, channelCounts);
 
             instruments.push({
                 // Defaults
-                channel: '',
                 address: '',
                 type: '',
                 position: '',
@@ -484,9 +654,9 @@ export const importLightwrightTxt = async (txtString, merge = false, selectedFie
                 notes: '',
                 text3: '',
                 text4: '',
-                // Overwrites
+                // Overwrites from parsed datum
                 ...datum,
-                // Enforced logic
+                // Enforced logic (always wins over datum)
                 channel: channelVal,
                 part: part,
                 dmxFootprint: datum.dmxFootprint || 1,
@@ -506,6 +676,12 @@ export const importMa2Xml = async (xmlString, merge = false) => {
     try {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+
+        // Check for XML parse errors
+        const parseError = xmlDoc.querySelector('parsererror');
+        if (parseError) {
+            throw new Error('Invalid XML: ' + (parseError.textContent || 'parse error').slice(0, 200));
+        }
 
         const layers = xmlDoc.getElementsByTagName("Layer");
         const instruments = [];
@@ -589,12 +765,7 @@ export const importMvr = async (arrayBuffer, merge = false) => {
 
         // If not merging, clear the database BEFORE we start adding GDTFs
         if (!merge) {
-            await db.transaction('rw', [db.instruments, db.eosTargets, db.fixtureLibrary, db.instrumentNotes], async () => {
-                await db.instruments.clear();
-                await db.eosTargets.clear();
-                await db.fixtureLibrary.clear();
-                await db.instrumentNotes.clear();
-            });
+            await clearAllTables();
         }
 
         // ── Step 1: Extract & import bundled GDTF files ──────────────────────
@@ -604,7 +775,6 @@ export const importMvr = async (arrayBuffer, merge = false) => {
         const gdtfEntries = Object.keys(zip.files).filter(name =>
             name.toLowerCase().endsWith('.gdtf') && !zip.files[name].dir
         );
-        console.log(`[MVR] Found ${gdtfEntries.length} bundled GDTF file(s)`);
 
         for (const gdtfPath of gdtfEntries) {
             try {
@@ -622,7 +792,6 @@ export const importMvr = async (arrayBuffer, merge = false) => {
                 gdtfMap[gdtfPath] = info;
                 gdtfMap[baseName] = info;
                 gdtfMap[baseName.replace(/\.gdtf$/i, '')] = info;
-                console.log(`[MVR] Imported GDTF: ${baseName} (${fixtureData.name})`);
             } catch (gdtfErr) {
                 console.warn(`[MVR] Failed to import GDTF "${gdtfPath}":`, gdtfErr);
             }
@@ -818,7 +987,6 @@ export const importMvr = async (arrayBuffer, merge = false) => {
             // Fallback: If no layers/fixtures found with structured approach, try flat scan
             const allFixtures = xmlDoc.getElementsByTagName('Fixture');
             if (allFixtures.length > 0) {
-                console.log(`[MVR] Hierarchical scan found nothing, falling back to flat scan for ${allFixtures.length} fixtures`);
                 for (let i = 0; i < allFixtures.length; i++) {
                     const child = allFixtures[i];
                     const uuid = child.getAttribute('uuid');
@@ -831,8 +999,6 @@ export const importMvr = async (arrayBuffer, merge = false) => {
             
             if (instruments.length === 0) throw new Error('No fixtures found in MVR file');
         }
-
-        console.log(`[MVR] Successfully parsed ${instruments.length} instruments`);
 
 
         // Assign part numbers for fixtures sharing the same channel
@@ -876,4 +1042,4 @@ export const removeDuplicates = async () => {
 };
 
 
-// Fixture library seeding is now disabled to prevent cluttering with blank data.
+

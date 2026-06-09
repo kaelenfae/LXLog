@@ -71,7 +71,7 @@ export function EquipmentListReport() {
                         </tr>
                     </thead>
                     <tbody>
-                        {summary.map((row, i) => (
+                        {summary.map((row) => (
                             <tr key={row.type} className="border-b border-gray-200">
                                 <td className="py-2">{row.type}</td>
                                 <td className="py-2 text-right font-mono font-bold">{row.count}</td>

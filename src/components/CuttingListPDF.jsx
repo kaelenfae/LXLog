@@ -36,10 +36,9 @@ export const CuttingListPDF = ({ showInfo, summary, sortBy, totalGroups, totalCu
             <Page size="A4" orientation={orientation} style={pdfStyles.page}>
                 <PDFHeader title="CUTTING LIST" showInfo={showInfo} />
 
-                {/* Summary line */}
                 <View style={{ flexDirection: 'row', marginBottom: 12, paddingBottom: 6, borderBottomWidth: 0.5, borderBottomColor: '#d1d5db' }}>
                     <Text style={{ fontSize: 8, color: '#4b5563' }}>
-                        Total {sortBy === 'color' ? 'Colors' : 'Types'}: {totalGroups}  •  Total Cuts: {totalCuts}
+                        Total {sortBy === 'color' ? 'Colors' : 'Frame Sizes'}: {totalGroups}  •  Total Cuts: {totalCuts}
                     </Text>
                 </View>
 
@@ -54,17 +53,17 @@ export const CuttingListPDF = ({ showInfo, summary, sortBy, totalGroups, totalCu
 
                         {/* Sub-table header */}
                         <View style={styles.tableHeader}>
-                            <Text style={{ width: '50%', fontSize: 7, color: '#6b7280', textTransform: 'uppercase' }}>
-                                {group.groupType === 'color' ? 'Instrument Type' : 'Color'}
+                            <Text style={{ width: '75%', fontSize: 7, color: '#6b7280', textTransform: 'uppercase' }}>
+                                {group.groupType === 'color' ? 'Frame Size' : 'Color'}
                             </Text>
-                            <Text style={{ width: '25%', fontSize: 7, color: '#6b7280', textTransform: 'uppercase', textAlign: 'center' }}>Frame Size</Text>
                             <Text style={{ width: '25%', fontSize: 7, color: '#6b7280', textTransform: 'uppercase', textAlign: 'right' }}>Quantity</Text>
                         </View>
 
                         {group.items.map((item, idx) => (
                             <View key={idx} style={styles.row}>
-                                <Text style={{ width: '50%', fontSize: 8 }}>{item.type || item.color}</Text>
-                                <Text style={{ width: '25%', fontSize: 8, textAlign: 'center', fontFamily: 'Courier', color: '#6b7280' }}>{item.frameSize || '—'}</Text>
+                                <Text style={{ width: '75%', fontSize: 8, fontFamily: group.groupType === 'color' ? 'Courier' : 'Helvetica' }}>
+                                    {group.groupType === 'color' ? item.frameSize : item.color}
+                                </Text>
                                 <Text style={{ width: '25%', fontSize: 9, textAlign: 'right', fontWeight: 'bold', fontFamily: 'Courier' }}>{item.count}</Text>
                             </View>
                         ))}

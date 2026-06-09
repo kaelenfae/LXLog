@@ -43,7 +43,6 @@ export function ImportWizardModal({ onClose, onConfirm }) {
     const [showMetadata, setShowMetadata] = useState({
         name: '',
         designer: '',
-        venue: '',
         assistant: '',
         director: '',
         producer: '',
@@ -164,7 +163,7 @@ export function ImportWizardModal({ onClose, onConfirm }) {
     // Process import from wizard
     const handleConfirm = () => {
         const selectedFieldNames = Object.entries(selectedFields)
-            .filter(([_, selected]) => selected)
+            .filter(([, selected]) => selected)
             .map(([name]) => name);
 
         onConfirm({
@@ -383,16 +382,7 @@ export function ImportWizardModal({ onClose, onConfirm }) {
                                         className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
                                     />
                                 </label>
-                                <label className="block">
-                                    <span className="text-xs text-[var(--text-secondary)]">Venue</span>
-                                    <input
-                                        type="text"
-                                        value={showMetadata.venue}
-                                        onChange={e => setShowMetadata({ ...showMetadata, venue: e.target.value })}
-                                        placeholder="Theater Name"
-                                        className="w-full mt-1 bg-[var(--bg-app)] border border-[var(--border-default)] rounded px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none transition-colors"
-                                    />
-                                </label>
+
                                 <label className="block">
                                     <span className="text-xs text-[var(--text-secondary)]">Designer</span>
                                     <input

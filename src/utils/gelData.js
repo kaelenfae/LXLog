@@ -3,16 +3,6 @@
 // Generated from https://github.com/eosti/color-filter-sds
 
 export const GEL_DATA = {
-    // Common Frosts (Visualized as Light Grey)
-    "R119": "#e0e0e0",
-    "R132": "#ebebeb",
-    "L228": "#ebebeb",
-    "L253": "#e0e0e0",
-    "L256": "#dcdcdc",
-    "L201": "#cce0ff", // CTB for context
-    "L202": "#e6f0ff", // 1/2 CTB
-    "L203": "#f0f5ff", // 1/4 CTB
-
     // Existing Data
     "L002": "#ff78dc",
     "L003": "#faf0fa",
@@ -681,16 +671,33 @@ export function getGelColor(input) {
         return cleanInput;
     }
 
+    // Check multi-gels (e.g. R119+R3202) -> return the first valid color
+    const separators = /[/+,;]/;
+    if (separators.test(cleanInput)) {
+        const parts = cleanInput.split(separators).filter(Boolean);
+        for (const p of parts) {
+            const color = getGelColor(p);
+            // We consider it valid if it doesn't return 'transparent'
+            if (color !== 'transparent') return color;
+        }
+    }
+
     return 'transparent';
 }
 
 export function getContrastColor(hexColor) {
     if (!hexColor || hexColor === 'transparent') return 'inherit';
 
+    // Normalize 3-digit hex to 6-digit (e.g. #FFF -> #FFFFFF)
+    let hex = hexColor;
+    if (/^#[0-9A-Fa-f]{3}$/.test(hex)) {
+        hex = '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+    }
+
     // Convert hex to RGB
-    const r = parseInt(hexColor.substr(1, 2), 16);
-    const g = parseInt(hexColor.substr(3, 2), 16);
-    const b = parseInt(hexColor.substr(5, 2), 16);
+    const r = parseInt(hex.substr(1, 2), 16);
+    const g = parseInt(hex.substr(3, 2), 16);
+    const b = parseInt(hex.substr(5, 2), 16);
 
     // Calculate brightness (YIQ)
     const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;

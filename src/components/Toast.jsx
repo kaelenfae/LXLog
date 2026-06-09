@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import PropTypes from 'prop-types';
 
 const ToastContext = createContext(null);
 
@@ -39,6 +40,12 @@ export function ToastProvider({ children }) {
         </ToastContext.Provider>
     );
 }
+
+
+
+ToastProvider.propTypes = {
+    children: PropTypes.node.isRequired,
+};
 
 const TOAST_STYLES = {
     success: {
@@ -140,3 +147,12 @@ function ToastContainer({ toasts, onDismiss }) {
         </div>
     );
 }
+
+ToastContainer.propTypes = {
+    toasts: PropTypes.arrayOf(PropTypes.shape({
+        id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+        message: PropTypes.string.isRequired,
+        type: PropTypes.string.isRequired,
+    })).isRequired,
+    onDismiss: PropTypes.func.isRequired,
+};

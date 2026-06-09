@@ -1,7 +1,6 @@
 import React from 'react';
 import classNames from 'classnames';
 import { formatAddress } from '../utils/addressFormatter';
-import { getGelColor } from '../utils/gelData';
 import { ColorSwatch } from './ColorSwatch';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
@@ -18,6 +17,13 @@ export function InstrumentCardList({
     addressCounts,
     channelCounts
 }) {
+    const virtualizer = useVirtualizer({
+        count: instruments?.length || 0,
+        getScrollElement: () => parentRef?.current,
+        estimateSize: () => 140, // estimated height of card + padding
+        overscan: 5,
+    });
+
     if (!instruments || instruments.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center h-64 text-[var(--text-tertiary)] gap-2">
@@ -28,13 +34,6 @@ export function InstrumentCardList({
             </div>
         );
     }
-
-    const virtualizer = useVirtualizer({
-        count: instruments.length,
-        getScrollElement: () => parentRef?.current,
-        estimateSize: () => 140, // estimated height of card + padding
-        overscan: 5,
-    });
 
     return (
         <div style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }} className="pb-24">
@@ -61,7 +60,16 @@ export function InstrumentCardList({
                         }}
                     >
                         <div
-                            onClick={(e) => onRowClick(e, inst)}
+                            onClick={(e) => {
+                                // If already in multiselect mode, tapping anything toggles selection
+                                if (selectedIds.size > 0) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    onToggleSelection(inst.id, e);
+                                } else {
+                                    onRowClick(e, inst);
+                                }
+                            }}
                             onContextMenu={(e) => onContextMenu(e, inst)}
                             className={classNames(
                                 "relative overflow-hidden flex flex-col gap-2 p-4 rounded-xl border transition-all active:scale-[0.98]",
@@ -146,14 +154,23 @@ export function InstrumentCardList({
                             )}
                         </div>
 
-                        {/* Selection Checkbox (Visible on long press or multi-select potentially) */}
-                        {isSelected && (
-                            <div className="absolute top-2 right-2">
-                                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        {/* Selection Checkbox (Always visible target) */}
+                        <div 
+                            className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer z-10"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onToggleSelection(inst.id, e);
+                            }}
+                        >
+                            <div className={classNames(
+                                "w-6 h-6 rounded-md border flex items-center justify-center transition-colors",
+                                isSelected ? "bg-white border-white text-[var(--accent-primary)]" : "border-[var(--border-subtle)] bg-[var(--bg-panel)] opacity-50 text-transparent"
+                            )}>
+                                <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                 </svg>
                             </div>
-                        )}
+                        </div>
                         </div>
                     </div>
                 );

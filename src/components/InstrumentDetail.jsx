@@ -1,11 +1,12 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useOutletContext } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, addNote, getInstrumentNotes } from '../db';
+import { db, addNote, getInstrumentNotes, ensureGenericFixture, deleteInstruments } from '../db';
 import { useSettings } from '../hooks/useSettings';
-import { getGelColor } from '../utils/gelData';
+import { useSuggestions } from '../hooks/useSuggestions';
 import { ColorPicker } from './ColorPicker';
 import { ColorSwatch } from './ColorSwatch';
+import { useToast } from './Toast';
 
 export function InstrumentDetail() {
     const { id } = useParams();
@@ -15,11 +16,12 @@ export function InstrumentDetail() {
     const isBulk = location.pathname.includes('/bulk');
     const bulkIds = location.state?.ids || [];
     const settings = useSettings();
-    const { universeSeparator, showAllFixtureTypes } = settings;
+    const { universeSeparator, showAllFixtureTypes, showXYZ } = settings;
     const { onToggleDetail } = useOutletContext() || {};
 
     const [touchedFields, setTouchedFields] = useState(new Set());
     const MIXED_VALUE = '(Mixed)';
+    const toast = useToast();
 
     const [formData, setFormData] = useState({
         channel: '',
@@ -38,6 +40,7 @@ export function InstrumentDetail() {
         gelFrameSize: '',
         fixtureTypeId: '',
         dmxMode: '',
+        z: isNew ? (settings.defaultGridHeight || '') : '',
         customFields: {}
     });
 
@@ -55,6 +58,9 @@ export function InstrumentDetail() {
     const [showTypeSuggestions, setShowTypeSuggestions] = useState(false);
     const [showDmxMap, setShowDmxMap] = useState(false);
     const [showColorPicker, setShowColorPicker] = useState(false);
+    const [showDupConfirm, setShowDupConfirm] = useState(false);
+    const [pendingSaveData, setPendingSaveData] = useState(null);
+    const [pendingDeleteContext, setPendingDeleteContext] = useState(null); // null | 'single' | 'bulk'
 
     // Get linked fixture for DMX map
     const linkedFixture = React.useMemo(() => {
@@ -69,7 +75,16 @@ export function InstrumentDetail() {
     const [activeTab, setActiveTab] = useState('general');
     const notes = useLiveQuery(() => (isNew || isBulk) ? [] : getInstrumentNotes(id), [id, isNew, isBulk]);
     const [newNote, setNewNote] = useState('');
-    const [deleteTimer, setDeleteTimer] = useState(null);
+    const deleteTimerRef = useRef(null);
+
+    // Cleanup delete timer on unmount
+    useEffect(() => {
+        return () => {
+            if (deleteTimerRef.current) {
+                clearTimeout(deleteTimerRef.current);
+            }
+        };
+    }, []);
 
     // Load data if editing
     const singleInstrument = useLiveQuery(
@@ -111,59 +126,89 @@ export function InstrumentDetail() {
         }
     }, [metadata]);
 
-    // Fetch unique values for autocomplete
-    const suggestions = useLiveQuery(async () => {
-        const instruments = await db.instruments.toArray();
-        const positions = new Set();
-        const purposes = new Set();
-        const typesInUse = new Set();
+    // Handle Escape Key — layered dismissal: overlays first, then inputs, then navigate back
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key !== 'Escape') return;
 
-        instruments.forEach(inst => {
-            if (inst.position) positions.add(inst.position);
-            if (inst.purpose) purposes.add(inst.purpose);
-            if (inst.type) typesInUse.add(inst.type);
-        });
+            // Layer 1: Close any open overlay/dropdown first (consume the event)
+            if (showTypeSuggestions) {
+                setShowTypeSuggestions(false);
+                e.stopPropagation();
+                return;
+            }
+            if (showColorPicker) {
+                setShowColorPicker(false);
+                e.stopPropagation();
+                return;
+            }
+            if (showDmxMap) {
+                setShowDmxMap(false);
+                e.stopPropagation();
+                return;
+            }
+            if (showDupConfirm) {
+                setShowDupConfirm(false);
+                e.stopPropagation();
+                return;
+            }
 
-        // Filter out library fixtures that are already in typesInUse
-        const libraryTypes = fixtureLibrary
-            .filter(f => !typesInUse.has(f.name))
-            .map(f => ({ name: f.name, isLibrary: true, fixture: f }));
 
-        return {
-            position: Array.from(positions).sort(),
-            purpose: Array.from(purposes).sort(),
-            type: [
-                ...Array.from(typesInUse).sort().map(t => ({ name: t, isLibrary: false })),
-                ...libraryTypes.sort((a, b) => a.name.localeCompare(b.name))
-            ]
+
+            // Layer 3: Navigate back to schedule and restore table focus
+            navigate('..');
+            setTimeout(() => {
+                const tableContainer = document.getElementById('instrument-schedule-container');
+                if (tableContainer) tableContainer.focus();
+            }, 50);
         };
-    }, [fixtureLibrary]);
 
-    // All instruments for overlap detection
-    const allInstruments = useLiveQuery(() => db.instruments.toArray()) || [];
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [navigate, showTypeSuggestions, showColorPicker, showDmxMap, showDupConfirm]);
+
+    // Fetch unique values for autocomplete (indexed queries, no full-table scan)
+    const suggestions = useSuggestions(fixtureLibrary);
+
+    // Load only same-universe instruments for overlap detection
+    const currentUniverse = React.useMemo(() => {
+        if (!formData.address) return null;
+        const match = formData.address.match(/^(\d+)[:/](\d+)$/);
+        return match ? match[1] : null;
+    }, [formData.address]);
+
+    const sameUniverseInstruments = useLiveQuery(
+        () => {
+            if (!currentUniverse) return [];
+            // Use address index with a prefix filter for the current universe
+            return db.instruments
+                .where('address')
+                .startsWith(`${currentUniverse}:`)
+                .or('address')
+                .startsWith(`${currentUniverse}/`)
+                .toArray();
+        },
+        [currentUniverse]
+    ) || [];
 
     // Calculate address overlaps
     const addressOverlaps = React.useMemo(() => {
         if (!formData.address) return [];
 
-        const addrMatch = formData.address.match(/^(\d+):(\d+)$/);
+        const addrMatch = formData.address.match(/^(\d+)[:/](\d+)$/);
         if (!addrMatch) return [];
 
-        const myUniv = parseInt(addrMatch[1]);
         const myStart = parseInt(addrMatch[2]);
         const myFootprint = parseInt(formData.dmxFootprint) || 1;
         const myEnd = myStart + myFootprint - 1;
         const myId = isNew ? null : Number(id);
 
-        return allInstruments.filter(inst => {
+        return sameUniverseInstruments.filter(inst => {
             if (inst.id === myId) return false; // Skip self
             if (!inst.address) return false;
 
             const instMatch = inst.address.match(/^(\d+)[:/](\d+)$/);
             if (!instMatch) return false;
-
-            const instUniv = parseInt(instMatch[1]);
-            if (instUniv !== myUniv) return false; // Different universe
 
             const instStart = parseInt(instMatch[2]);
             const instFootprint = parseInt(inst.dmxFootprint) || 1;
@@ -172,7 +217,7 @@ export function InstrumentDetail() {
             // Check for overlap
             return (myStart <= instEnd && myEnd >= instStart);
         });
-    }, [formData.address, formData.dmxFootprint, allInstruments, id, isNew]);
+    }, [formData.address, formData.dmxFootprint, sameUniverseInstruments, id, isNew]);
 
     useEffect(() => {
         if (isBulk && bulkInstruments && bulkInstruments.length > 0) {
@@ -189,13 +234,45 @@ export function InstrumentDetail() {
             keys.forEach(key => {
                 if (key === 'customFields') return; // Skip complex obj for now or handle deep compare
                 const allSame = bulkInstruments.every(inst => inst[key] === first[key]);
-                commonData[key] = allSame ? first[key] : (key === 'channel' || key === 'address' || key === 'unit' ? MIXED_VALUE : MIXED_VALUE);
+                let val = allSame ? first[key] : (key === 'channel' || key === 'address' || key === 'unit' ? MIXED_VALUE : MIXED_VALUE);
+                if (key === 'address' && val && val !== MIXED_VALUE) {
+                    const otherSeparator = universeSeparator === ':' ? '/' : ':';
+                    val = val.replace(otherSeparator, universeSeparator);
+                }
+                commonData[key] = val;
             });
+
+            // Normalize DMX Mode for bulk instruments if they have a single fixtureTypeId
+            if (commonData.fixtureTypeId && commonData.fixtureTypeId !== MIXED_VALUE && fixtureLibrary.length > 0) {
+                const fixture = fixtureLibrary.find(f => f.fixtureTypeId === commonData.fixtureTypeId);
+                if (fixture && fixture.dmxModes && fixture.dmxModes.length > 0) {
+                    const hasCurrentMode = fixture.dmxModes.some(m => m.name === commonData.dmxMode);
+                    if (!hasCurrentMode && commonData.dmxMode !== MIXED_VALUE) {
+                        commonData.dmxMode = fixture.dmxModes[0].name;
+                        commonData.dmxFootprint = fixture.dmxModes[0].footprint || commonData.dmxFootprint;
+                    }
+                }
+            }
 
             // Handle custom fields separately if needed, for now ignore
             setFormData(commonData);
         } else if (stableInstrument) {
-            setFormData(stableInstrument);
+            const cleanedInstrument = { ...stableInstrument };
+            if (cleanedInstrument.address) {
+                const otherSeparator = universeSeparator === ':' ? '/' : ':';
+                cleanedInstrument.address = cleanedInstrument.address.replace(otherSeparator, universeSeparator);
+            }
+            if (cleanedInstrument.fixtureTypeId && fixtureLibrary.length > 0) {
+                const fixture = fixtureLibrary.find(f => f.fixtureTypeId === cleanedInstrument.fixtureTypeId);
+                if (fixture && fixture.dmxModes && fixture.dmxModes.length > 0) {
+                    const hasCurrentMode = fixture.dmxModes.some(m => m.name === cleanedInstrument.dmxMode);
+                    if (!hasCurrentMode) {
+                        cleanedInstrument.dmxMode = fixture.dmxModes[0].name;
+                        cleanedInstrument.dmxFootprint = fixture.dmxModes[0].footprint || cleanedInstrument.dmxFootprint;
+                    }
+                }
+            }
+            setFormData(cleanedInstrument);
         } else if (isNew) {
             setFormData({
                 channel: '',
@@ -217,21 +294,24 @@ export function InstrumentDetail() {
                 customFields: {}
             });
         }
-    }, [stableInstrument, isNew, isBulk, stableBulkInstruments]);
+    }, [stableInstrument, isNew, isBulk, stableBulkInstruments, universeSeparator, fixtureLibrary]);
 
 
-    // Sync address separator when setting changes or data loads
+    // Sync address separator when setting changes
     useEffect(() => {
-        if (formData.address) {
-            const otherSeparator = universeSeparator === ':' ? '/' : ':';
-            if (formData.address.includes(otherSeparator)) {
-                setFormData(prev => ({
-                    ...prev,
-                    address: prev.address.replace(otherSeparator, universeSeparator)
-                }));
+        setFormData(prev => {
+            if (prev.address) {
+                const otherSeparator = universeSeparator === ':' ? '/' : ':';
+                if (prev.address.includes(otherSeparator)) {
+                    return {
+                        ...prev,
+                        address: prev.address.replace(otherSeparator, universeSeparator)
+                    };
+                }
             }
-        }
-    }, [universeSeparator, formData.address]);
+            return prev;
+        });
+    }, [universeSeparator]);
 
     // Handle field focus from navigation state
     useEffect(() => {
@@ -252,18 +332,20 @@ export function InstrumentDetail() {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        let finalValue = value;
+        if (name === 'address') {
+            const otherSeparator = universeSeparator === ':' ? '/' : ':';
+            finalValue = value.replace(otherSeparator, universeSeparator);
+        }
+        setFormData(prev => ({ ...prev, [name]: finalValue }));
         if (isBulk) {
             setTouchedFields(prev => new Set(prev).add(name));
         }
     };
 
-    const [showDupConfirm, setShowDupConfirm] = useState(false);
-    const [pendingSaveData, setPendingSaveData] = useState(null);
-    const [pendingDeleteContext, setPendingDeleteContext] = useState(null); // null | 'single' | 'bulk'
-
     const handleSave = async (forceSave = false) => {
-        if (isBulk) {
+        try {
+            if (isBulk) {
             // Bulk Save Logic
             if (touchedFields.size === 0) {
                 navigate('..');
@@ -275,10 +357,69 @@ export function InstrumentDetail() {
                 updates[field] = formData[field];
             });
 
-            // If updating address/channel, we might need special logic (e.g. auto-increment) logic but for "bulk edit" usually users set same value (e.g. all Position = FOH).
-            // Users are responsible for collisions if they bulk-set ID fields.
+            if (updates.type) {
+                const fixtureTypeId = await ensureGenericFixture(updates.type);
+                if (fixtureTypeId) updates.fixtureTypeId = fixtureTypeId;
+            }
 
-            await db.instruments.where('id').anyOf(bulkIds).modify(updates);
+            // Fetch instruments to modify sequentially based on selection order
+            const existingInsts = await db.instruments.where('id').anyOf(bulkIds).toArray();
+            const instMap = new Map(existingInsts.map(i => [i.id, i]));
+            const instrumentsToPut = [];
+
+            bulkIds.forEach((id, index) => {
+                const inst = instMap.get(id);
+                if (!inst) return;
+
+                const parsedUpdates = { ...updates };
+                
+                // Process sequential fields (channel, unit)
+                ['channel', 'unit'].forEach(field => {
+                    if (parsedUpdates[field] && typeof parsedUpdates[field] === 'string') {
+                        const val = parsedUpdates[field].trim();
+                        // Handle "1++"
+                        let match = val.match(/^(\d+)\+\+$/);
+                        if (match) {
+                            const start = parseInt(match[1], 10);
+                            parsedUpdates[field] = String(start + index);
+                        } else {
+                            // Handle "1-5" or "1-x" (end is ignored, just increments from start)
+                            match = val.match(/^(\d+)-(?:\d+|x|X)$/);
+                            if (match) {
+                                const start = parseInt(match[1], 10);
+                                parsedUpdates[field] = String(start + index);
+                            }
+                        }
+                    }
+                });
+
+                Object.assign(inst, parsedUpdates);
+                instrumentsToPut.push(inst);
+            });
+
+            await db.instruments.bulkPut(instrumentsToPut);
+
+            // Type propagation for bulk edits
+            const typeProps = ['gelFrameSize', 'watt', 'weight', 'dmxFootprint'];
+            const hasTypeUpdates = typeProps.some(p => updates[p] !== undefined && updates[p] !== MIXED_VALUE);
+            
+            if (hasTypeUpdates && !updates.type) {
+                // Find the types of the instruments we just bulk updated
+                const updatedInsts = await db.instruments.where('id').anyOf(bulkIds).toArray();
+                const typesToUpdate = new Set(updatedInsts.map(i => i.type).filter(Boolean));
+                
+                if (typesToUpdate.size > 0) {
+                    const typeUpdates = {};
+                    typeProps.forEach(p => {
+                        if (updates[p] !== undefined && updates[p] !== MIXED_VALUE) typeUpdates[p] = updates[p];
+                    });
+                    
+                    // Update all instruments of these types
+                    for (const type of typesToUpdate) {
+                        await db.instruments.where('type').equals(type).modify(typeUpdates);
+                    }
+                }
+            }
 
             // Log changes? Ideally yes but might spam. System note on first or all? 
             // Let's skip detailed logs for bulk for now or log "Bulk Update" to system log.
@@ -325,33 +466,57 @@ export function InstrumentDetail() {
             }
         }
 
+        if (dataToSave.type) {
+            const fixtureTypeId = await ensureGenericFixture(dataToSave.type);
+            if (fixtureTypeId) dataToSave.fixtureTypeId = fixtureTypeId;
+        }
+
         if (isNew) {
             const newId = await db.instruments.add(dataToSave);
             // Log Creation
             await addNote(newId, 'Created Instrument', 'system');
         } else {
-            // Calculate changes for audit log
+            // Fetch existing record once for audit log + type propagation
             const existing = await db.instruments.get(Number(id));
             if (existing) {
-                const changes = [];
-                const keys = ['channel', 'address', 'position', 'unit', 'type', 'purpose', 'color', 'gobo', 'watt'];
-
-                keys.forEach(key => {
-                    const oldVal = existing[key] || '';
-                    const newVal = dataToSave[key] || '';
-                    if (oldVal !== newVal) {
-                        changes.push(`${key}: ${oldVal} -> ${newVal}`);
-                    }
-                });
+                // Audit log — only track meaningful field changes
+                const auditKeys = ['channel', 'address', 'position', 'unit', 'type', 'purpose', 'color', 'gobo', 'watt', 'gelFrameSize', 'accessory', 'dmxMode'];
+                const changes = auditKeys
+                    .filter(key => (existing[key] || '') !== (dataToSave[key] || ''))
+                    .map(key => `${key}: ${existing[key] || ''} -> ${dataToSave[key] || ''}`);
 
                 if (changes.length > 0) {
                     await addNote(Number(id), `Updated: ${changes.join(', ')}`, 'system');
                 }
+
+                // Type propagation — only runs when type matches AND a type-level prop actually changed
+                if (dataToSave.type && existing.type === dataToSave.type) {
+                    const typeProps = ['gelFrameSize', 'watt', 'weight', 'dmxFootprint'];
+                    const typeUpdates = {};
+                    typeProps.forEach(prop => {
+                        if (dataToSave[prop] !== existing[prop] && dataToSave[prop] !== undefined) {
+                            typeUpdates[prop] = dataToSave[prop];
+                        }
+                    });
+
+                    if (Object.keys(typeUpdates).length > 0) {
+                        // Use .modify() directly on the type index — no toArray() needed
+                        await db.instruments
+                            .where('type')
+                            .equals(dataToSave.type)
+                            .filter(i => i.id !== Number(id))
+                            .modify(typeUpdates);
+                    }
+                }
             }
 
             await db.instruments.update(Number(id), dataToSave);
+            }
+            navigate('..');
+        } catch (err) {
+            console.error("Failed to save instrument:", err);
+            toast.error("Failed to save instrument(s).");
         }
-        navigate('..');
     };
 
     const handleAddNote = async () => {
@@ -362,42 +527,52 @@ export function InstrumentDetail() {
 
     const handleReplace = async () => {
         if (!pendingSaveData) return;
-        // Delete all instruments with this channel
-        const existing = await db.instruments
-            .where('channel')
-            .equals(String(pendingSaveData.channel))
-            .toArray();
+        try {
+            // Delete all instruments with this channel
+            const existing = await db.instruments
+                .where('channel')
+                .equals(String(pendingSaveData.channel))
+                .toArray();
 
-        const idsToDelete = existing.filter(inst => inst.id !== Number(id)).map(inst => inst.id);
-        if (idsToDelete.length > 0) {
-            await db.instruments.bulkDelete(idsToDelete);
+            const idsToDelete = existing.filter(inst => inst.id !== Number(id)).map(inst => inst.id);
+            if (idsToDelete.length > 0) {
+                await db.instruments.bulkDelete(idsToDelete);
+            }
+
+            // Save the new one
+            await handleSave(true);
+        } catch (err) {
+            console.error("Failed to replace instrument:", err);
+            toast.error("Failed to replace instrument.");
         }
-
-        // Save the new one
-        await handleSave(true);
     };
 
     const handleAddPart = async () => {
         if (!pendingSaveData) return;
-        // Find existing parts
-        const existing = await db.instruments
-            .where('channel')
-            .equals(String(pendingSaveData.channel))
-            .toArray();
+        try {
+            // Find existing parts
+            const existing = await db.instruments
+                .where('channel')
+                .equals(String(pendingSaveData.channel))
+                .toArray();
 
-        const maxPart = Math.max(0, ...existing.map(inst => inst.part || 1));
-        const updatedData = { ...pendingSaveData, part: maxPart + 1 };
+            const maxPart = Math.max(0, ...existing.map(inst => inst.part || 1));
+            const updatedData = { ...pendingSaveData, part: maxPart + 1 };
 
-        setFormData(updatedData); // Update form so user sees it
-        setPendingSaveData(updatedData);
+            setFormData(updatedData); // Update form so user sees it
+            setPendingSaveData(updatedData);
 
-        // Save with new part
-        if (isNew) {
-            await db.instruments.add(updatedData);
-        } else {
-            await db.instruments.update(Number(id), updatedData);
+            // Save with new part
+            if (isNew) {
+                await db.instruments.add(updatedData);
+            } else {
+                await db.instruments.update(Number(id), updatedData);
+            }
+            navigate('..');
+        } catch (err) {
+            console.error("Failed to add part:", err);
+            toast.error("Failed to add part.");
         }
-        navigate('..');
     };
 
     const handleDelete = (e) => {
@@ -405,24 +580,20 @@ export function InstrumentDetail() {
         // First click: turn button red and start timer
         setPendingDeleteContext(isBulk ? 'bulk' : 'single');
         
-        if (deleteTimer) clearTimeout(deleteTimer);
-        const timer = setTimeout(() => {
+        if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+        deleteTimerRef.current = setTimeout(() => {
             setPendingDeleteContext(null);
         }, 4000); // 4 second window to confirm
-        setDeleteTimer(timer);
     };
 
     const handleDeleteConfirmed = async (e) => {
         if (e) e.stopPropagation();
-        if (deleteTimer) clearTimeout(deleteTimer);
+        if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
         if (isBulk) {
-            await db.instruments.bulkDelete(bulkIds);
-            // Cascade-delete orphaned notes
-            await db.instrumentNotes.where('instrumentId').anyOf(bulkIds).delete();
+            await deleteInstruments(bulkIds);
             navigate('..');
         } else if (!isNew) {
-            await db.instruments.delete(Number(id));
-            await db.instrumentNotes.where('instrumentId').equals(Number(id)).delete();
+            await deleteInstruments([Number(id)]);
             navigate('..');
         }
     };
@@ -471,9 +642,15 @@ export function InstrumentDetail() {
     };
 
     return (
-        <div className="h-full flex flex-col bg-[var(--bg-card)] border-l border-[var(--border-subtle)]">
+        <div className="h-full flex flex-col border-l transition-all duration-300" style={{
+            backgroundColor: isBulk ? 'var(--bg-bulk-edit)' : 'var(--bg-card)',
+            borderColor: isBulk ? 'var(--border-bulk-edit)' : 'var(--border-subtle)'
+        }}>
             {/* Panel Header */}
-            <div className="h-14 border-b border-[var(--border-subtle)] flex items-center px-6 justify-between bg-[var(--bg-card)] shrink-0">
+            <div className="h-14 border-b flex items-center px-6 justify-between shrink-0 transition-all duration-300" style={{
+                backgroundColor: isBulk ? 'var(--bg-bulk-edit-header)' : 'var(--bg-card)',
+                borderColor: isBulk ? 'var(--border-bulk-edit)' : 'var(--border-subtle)'
+            }}>
                 <div className="flex items-center gap-3">
                     {onToggleDetail && (
                         <button
@@ -491,7 +668,9 @@ export function InstrumentDetail() {
                             <svg className="w-5 h-5 block md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                         </button>
                     )}
-                    <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+                    <h2 className="text-lg font-semibold transition-colors duration-300" style={{
+                        color: isBulk ? 'var(--text-bulk-edit)' : 'var(--text-primary)'
+                    }}>
                         {isBulk ? `Bulk Edit (${bulkIds.length} Instruments)` : (isNew ? 'New Instrument' : 'Edit Details')}
                     </h2>
                 </div>
@@ -520,7 +699,10 @@ export function InstrumentDetail() {
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-[var(--border-subtle)] bg-[var(--bg-panel)] px-6 gap-6">
+            <div className="flex border-b px-6 gap-6 transition-all duration-300" style={{
+                backgroundColor: isBulk ? 'var(--bg-bulk-edit-tabs)' : 'var(--bg-panel)',
+                borderColor: isBulk ? 'var(--border-bulk-edit)' : 'var(--border-subtle)'
+            }}>
                 <button
                     onClick={() => setActiveTab('general')}
                     className={`py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'general' ? 'border-[var(--accent-primary)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'}`}
@@ -542,8 +724,11 @@ export function InstrumentDetail() {
                 {activeTab === 'general' ? (
                     <form className="grid grid-cols-1 gap-5 max-w-lg mx-auto" onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
                         {isBulk && (
-                            <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-md p-3 mb-4">
-                                <div className="flex items-center gap-2 text-indigo-400 text-sm font-medium">
+                            <div className="rounded-md p-3 mb-4 border" style={{
+                                backgroundColor: 'var(--bg-bulk-edit-tabs)',
+                                borderColor: 'var(--border-bulk-edit)'
+                            }}>
+                                <div className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--text-bulk-edit)' }}>
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                     Bulk Edit Mode
                                 </div>
@@ -557,12 +742,12 @@ export function InstrumentDetail() {
                             <div className="flex gap-2">
                                 <div className="w-24 flex flex-col gap-1.5 shrink-0">
                                     <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Channel</label>
-                                    <input name="channel" value={formData.channel || ''} onChange={handleChange} autoFocus={!location.state?.focusField} className="font-mono text-lg font-bold text-[var(--accent-primary)] panel-input text-center" placeholder="#" autoComplete="off" />
+                                    <input name="channel" value={formData.channel || ''} onChange={handleChange} autoFocus={!location.state?.focusField && !location.state?.preventFocus} className="font-mono text-lg font-bold text-[var(--accent-primary)] panel-input text-center" placeholder="#" autoComplete="off" />
                                 </div>
-                                {isMultiPart && (
+                                {formData.channel && (
                                     <div className="w-20 flex flex-col gap-1.5 shrink-0">
                                         <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Part</label>
-                                        <input name="part" type="number" min="1" value={formData.part || 1} onChange={handleChange} className="font-mono text-lg font-bold text-[var(--accent-primary)] panel-input text-center p-0" autoComplete="off" />
+                                        <input name="part" type="number" min="1" value={formData.part || ''} placeholder="1" onChange={handleChange} className="font-mono text-lg font-bold text-[var(--accent-primary)] panel-input text-center p-0" autoComplete="off" />
                                     </div>
                                 )}
                             </div>
@@ -900,6 +1085,29 @@ export function InstrumentDetail() {
                             </div>
                         </div>
 
+                        <div className="grid grid-cols-4 gap-4 mb-4">
+                            <div className="col-span-1 flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider text-nowrap overflow-hidden text-ellipsis" title="Distance from Center">Dist Center</label>
+                                <input name="distance" value={formData.distance || ''} onChange={handleChange} className="panel-input" autoComplete="off" />
+                            </div>
+                            {showXYZ && (
+                                <>
+                                    <div className="col-span-1 flex flex-col gap-1.5">
+                                        <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">X</label>
+                                        <input name="x" value={formData.x || ''} onChange={handleChange} className="panel-input" autoComplete="off" />
+                                    </div>
+                                    <div className="col-span-1 flex flex-col gap-1.5">
+                                        <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Y</label>
+                                        <input name="y" value={formData.y || ''} onChange={handleChange} className="panel-input" autoComplete="off" />
+                                    </div>
+                                    <div className="col-span-1 flex flex-col gap-1.5">
+                                        <label className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">Z</label>
+                                        <input name="z" value={formData.z || ''} onChange={handleChange} className="panel-input" autoComplete="off" />
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
                         {/* Custom Fields Section */}
                         {globalFieldDefs.length > 0 && (
                             <>
@@ -983,7 +1191,7 @@ export function InstrumentDetail() {
                         )}
 
                         <div className="pt-4 mt-2">
-                            <button type="submit" className="w-full primary py-2.5 shadow-lg shadow-indigo-500/20 text-sm">
+                            <button type="submit" className="w-full primary py-2.5 shadow-lg shadow-[var(--accent-primary)]/20 text-sm">
                                 {isNew ? 'Create Instrument' : 'Save Changes'}
                             </button>
                         </div>
@@ -1066,7 +1274,7 @@ export function InstrumentDetail() {
                             <div className="space-y-3">
                                 <button
                                     onClick={handleAddPart}
-                                    className="w-full py-2.5 bg-[var(--accent-primary)] text-white rounded font-bold hover:bg-[var(--accent-hover)] transition-colors shadow-lg shadow-indigo-500/10"
+                                    className="w-full py-2.5 bg-[var(--accent-primary)] text-white rounded font-bold hover:bg-[var(--accent-hover)] transition-colors shadow-lg shadow-[var(--accent-primary)]/10"
                                 >
                                     Add as Part (.{(pendingSaveData?.part || 1) + 1})
                                 </button>

@@ -22,91 +22,86 @@ export function CuttingListReport() {
         if (!instruments) return [];
 
         if (sortBy === 'color') {
-            // Group by color first, then by type+frameSize within each color
+            // Group by color, sub-items are frameSize
             const colorGroups = {};
             instruments.forEach(inst => {
                 if (!inst.color) return;
-                const color = inst.color.trim();
-                if (!color) return;
+                const rawColor = inst.color.trim();
+                if (!rawColor) return;
+                
+                const colors = rawColor.split('+').map(c => c.trim()).filter(Boolean);
+                
+                colors.forEach(color => {
+                    if (!colorGroups[color]) {
+                        colorGroups[color] = {};
+                    }
 
-                if (!colorGroups[color]) {
-                    colorGroups[color] = {};
-                }
+                    const frameSize = inst.gelFrameSize || 'Unknown Size';
 
-                const type = inst.type || 'Unknown';
-                const frameSize = inst.gelFrameSize || '';
-                const key = frameSize ? `${type}|${frameSize}` : type;
-
-                if (!colorGroups[color][key]) {
-                    colorGroups[color][key] = { type, frameSize, count: 0 };
-                }
-                colorGroups[color][key].count++;;
+                    if (!colorGroups[color][frameSize]) {
+                        colorGroups[color][frameSize] = { frameSize, count: 0 };
+                    }
+                    colorGroups[color][frameSize].count++;
+                });
             });
 
             // Convert to array format
             return Object.entries(colorGroups)
-                .map(([color, types]) => {
-                    const typeTotals = Object.values(types)
-                        .map(item => ({ type: item.type, frameSize: item.frameSize, count: item.count }))
-                        .sort((a, b) => {
-                            const typeCompare = a.type.localeCompare(b.type);
-                            if (typeCompare !== 0) return typeCompare;
-                            return (a.frameSize || '').localeCompare(b.frameSize || '', undefined, { numeric: true });
-                        });
+                .map(([color, sizes]) => {
+                    const sizeTotals = Object.values(sizes)
+                        .map(item => ({ frameSize: item.frameSize, count: item.count }))
+                        .sort((a, b) => a.frameSize.localeCompare(b.frameSize, undefined, { numeric: true }));
 
-                    const totalCount = typeTotals.reduce((sum, t) => sum + t.count, 0);
+                    const totalCount = sizeTotals.reduce((sum, t) => sum + t.count, 0);
 
                     return {
                         groupName: color,
                         groupType: 'color',
                         count: totalCount,
-                        items: typeTotals
+                        items: sizeTotals
                     };
                 })
                 .sort((a, b) => a.groupName.localeCompare(b.groupName, undefined, { numeric: true }));
         } else {
-            // Group by type first, then by color within each type
-            const typeGroups = {};
+            // Group by frameSize, sub-items are color
+            const sizeGroups = {};
             instruments.forEach(inst => {
                 if (!inst.color) return;
-                const color = inst.color.trim();
-                if (!color) return;
+                const rawColor = inst.color.trim();
+                if (!rawColor) return;
 
-                const type = inst.type || 'Unknown';
-                if (!typeGroups[type]) {
-                    typeGroups[type] = {};
+                const colors = rawColor.split('+').map(c => c.trim()).filter(Boolean);
+                const frameSize = inst.gelFrameSize || 'Unknown Size';
+                
+                if (!sizeGroups[frameSize]) {
+                    sizeGroups[frameSize] = {};
                 }
 
-                const frameSize = inst.gelFrameSize || '';
-                const key = frameSize ? `${color}|${frameSize}` : color;
-
-                if (!typeGroups[type][key]) {
-                    typeGroups[type][key] = { color, frameSize, count: 0 };
-                }
-                typeGroups[type][key].count++;;
+                colors.forEach(color => {
+                    if (!sizeGroups[frameSize][color]) {
+                        sizeGroups[frameSize][color] = { color, count: 0 };
+                    }
+                    sizeGroups[frameSize][color].count++;
+                });
             });
 
             // Convert to array format
-            return Object.entries(typeGroups)
-                .map(([type, colors]) => {
+            return Object.entries(sizeGroups)
+                .map(([frameSize, colors]) => {
                     const colorTotals = Object.values(colors)
-                        .map(item => ({ color: item.color, frameSize: item.frameSize, count: item.count }))
-                        .sort((a, b) => {
-                            const colorCompare = a.color.localeCompare(b.color, undefined, { numeric: true });
-                            if (colorCompare !== 0) return colorCompare;
-                            return (a.frameSize || '').localeCompare(b.frameSize || '', undefined, { numeric: true });
-                        });
+                        .map(item => ({ color: item.color, count: item.count }))
+                        .sort((a, b) => a.color.localeCompare(b.color, undefined, { numeric: true }));
 
                     const totalCount = colorTotals.reduce((sum, c) => sum + c.count, 0);
 
                     return {
-                        groupName: type,
-                        groupType: 'type',
+                        groupName: frameSize,
+                        groupType: 'frameSize',
                         count: totalCount,
                         items: colorTotals
                     };
                 })
-                .sort((a, b) => a.groupName.localeCompare(b.groupName));
+                .sort((a, b) => a.groupName.localeCompare(b.groupName, undefined, { numeric: true }));
         }
     }, [instruments, sortBy]);
 
@@ -129,10 +124,10 @@ export function CuttingListReport() {
                     </button>
                     <div className="w-px bg-gray-300"></div>
                     <button
-                        onClick={() => setSortBy('type')}
-                        className={`px-3 py-1 ${sortBy === 'type' ? 'bg-indigo-600 text-white' : 'hover:bg-gray-100'}`}
+                        onClick={() => setSortBy('frameSize')}
+                        className={`px-3 py-1 ${sortBy === 'frameSize' ? 'bg-indigo-600 text-white' : 'hover:bg-gray-100'}`}
                     >
-                        Type
+                        Frame Size
                     </button>
                 </div>
             </div>
@@ -182,7 +177,7 @@ export function CuttingListReport() {
                 {/* Header with Totals */}
                 <div className="mb-6 pb-3 border-b border-gray-300 flex justify-between items-center">
                     <div className="text-sm text-gray-600">
-                        <span className="font-semibold">Total {sortBy === 'color' ? 'Colors' : 'Types'}:</span> {totalGroups}
+                        <span className="font-semibold">Total {sortBy === 'color' ? 'Colors' : 'Frame Sizes'}:</span> {totalGroups}
                         <span className="mx-3">•</span>
                         <span className="font-semibold">Total Cuts:</span> {totalCuts}
                     </div>
@@ -211,25 +206,23 @@ export function CuttingListReport() {
                             <thead>
                                 <tr className="border-b border-gray-300">
                                     <th className="py-1 text-left text-xs text-gray-600">
-                                        {group.groupType === 'color' ? 'Instrument Type' : 'Color'}
+                                        {group.groupType === 'color' ? 'Frame Size' : 'Color'}
                                     </th>
-                                    <th className="py-1 text-center text-xs text-gray-600">Frame Size</th>
                                     <th className="py-1 text-right text-xs text-gray-600">Quantity</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {group.items.map((item, idx) => (
-                                    <tr key={`${item.type || item.color}-${item.frameSize || ''}-${idx}`} className="border-b border-gray-100">
+                                    <tr key={`${item.color || item.frameSize}-${idx}`} className="border-b border-gray-100">
                                         <td className="py-1 flex items-center gap-2">
-                                            {item.color && group.groupType === 'type' && showSwatches && (
+                                            {item.color && group.groupType === 'frameSize' && showSwatches && (
                                                 <span
                                                     className="inline-block w-4 h-4 rounded border border-gray-400 shrink-0"
                                                     style={{ backgroundColor: getGelColor(item.color) }}
                                                 />
                                             )}
-                                            {item.type || item.color}
+                                            {group.groupType === 'color' ? item.frameSize : item.color}
                                         </td>
-                                        <td className="py-1 text-center font-mono text-gray-600">{item.frameSize || '—'}</td>
                                         <td className="py-1 text-right font-mono font-bold">{item.count}</td>
                                     </tr>
                                 ))}

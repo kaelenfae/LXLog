@@ -2,6 +2,26 @@
 
 All notable changes to LXLog will be documented in this file.
 
+## [0.5.0] - 2026-06-05
+
+### Added
+- Comprehensive standalone HTML instruction manual (`LXLog_Manual.htm`), served directly via Vite and linked via a new "Open Full Manual" button on the About page.
+- Multi-Part Channels support: Combine multiple selected fixtures on the same channel into a single channel with sequential parts. Added a "Part" column to the spreadsheet grid and a manual "Part" field editor in the instrument detail panel.
+- Persistent Venue Settings tab in Settings modal to save venue name, default grid height (Z), address, contact info, and notes in localStorage across different show files.
+- Automatic Fixture Registration: Typing/adding a new fixture type automatically adds a generic profile to the local Fixture Library.
+- Library Auto-population: Fixture details (DMX footprint, wattage, weight, DMX mode, and frame size) are automatically synced from library definitions when entering/selecting a type.
+- Fixture Library Merging: Enabled merging of any fixture type (both generic and GDTF-imported) in the Fixture Library into another target type, automatically updating all matching instruments in the active schedule.
+
+### Changed
+- Refined the About page Operation Manual text to cover basic features and point to the full manual.
+- Improved grid multi-selection by resolving Ctrl/Cmd+Click cell double-toggling.
+- Updated bulk edit highlight in Details panel to use theme-aware relative color-mix variables, correcting visual contrast on all themes.
+- Standardized Hanging Schedule column layout to position "Distance from Center" directly between "Type" and "Wattage" in both the UI and printed PDFs.
+
+### Fixed
+- Fixed print rendering bugs where address formatting was corrupted when compiling reports in the Print Center.
+- Multiple background fixes.
+
 ## [0.4.5] - 2026-04-12
 
 ### Changed

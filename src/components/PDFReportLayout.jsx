@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Document, Page, View, Text } from '@react-pdf/renderer';
+import { STORAGE_KEYS } from '../constants';
 
 export const pdfStyles = StyleSheet.create({
     page: {
@@ -76,11 +77,13 @@ export const PDFHeader = ({ title, showInfo }) => {
         { label: 'Producer', value: showInfo.producer },
     ].filter(f => f.value && f.value.trim() !== '');
 
+    const venueName = localStorage.getItem(STORAGE_KEYS.VENUE_NAME) || '';
+
     return (
         <View style={pdfStyles.header} fixed>
             <View style={pdfStyles.headerSide}>
                 <Text style={pdfStyles.headerLabel}>VENUE</Text>
-                <Text style={pdfStyles.headerValue}>{showInfo.venue || ' '}</Text>
+                <Text style={pdfStyles.headerValue}>{venueName}</Text>
             </View>
             <View style={pdfStyles.headerCenter}>
                 <Text style={pdfStyles.showTitle}>{showInfo.name || 'Untitled Show'}</Text>

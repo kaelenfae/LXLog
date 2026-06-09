@@ -1,7 +1,38 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { STORAGE_KEYS } from '../constants';
 
 const PATCH_NOTES = [
+    {
+        version: "0.5.0",
+        date: "2026-06-05",
+        title: "Instruction Manual & Multi-Part Channels",
+        changes: [
+            "Complete Operation Manual – Created a comprehensive standalone instruction manual, linked via a new 'Open Full Manual' button on the About page.",
+            "Multi-Part Channels – Combine multiple instruments on the same channel into single fixtures with parts (e.g. .1, .2). Added a 'Part' column in the grid and a manual 'Part' editor in the details panel to align with EOS console workflows.",
+            "Automatic Fixture Registration – Entering a new fixture type automatically creates a generic profile in the local Fixture Library.",
+            "Library Auto-population – Setting a fixture type now auto-populates DMX footprint, wattage, weight, DMX mode, and frame size from GDTF or generic library definitions.",
+            "Fixture Library Merging – Merge any fixture type (both generic and GDTF-imported profiles) in the Fixture Library into another target type, automatically updating all matching instruments in the active schedule.",
+            "Persistent Venue Settings – Added a dedicated 'Venue' tab in settings to persist show-to-show venue configurations (Venue Name, default Z height, Address, Contact, Notes) in localStorage.",
+            "Grid Multi-selection – Resolved Ctrl/Cmd+Click cell double-toggling, allowing users to add individual instruments to bulk select.",
+            "Theme-Aware Bulk Edit Highlight – Details panel background color shift dynamically calculates contrast for all custom themes when Bulk Edit is active.",
+            "Hanging Schedule Reordering – Placed the 'Distance from Center' column between Type and Wattage in both the UI schedule and PDF prints.",
+            "Print Center Fixes – Resolved address formatting issues when compiling multiple PDF reports.",
+            "Multiple background fixes."
+        ]
+    },
+    {
+        version: "0.4.7",
+        date: "2026-05-24",
+        title: "Spreadsheet Workflows & Global Search",
+        changes: [
+            "Global Search – The search bar is now exposed on desktop. Fuzzy match against address, type, color, gobo, and more.",
+            "Smart Selection – The 'Select All' checkbox now respects your active search filter, enabling rapid bulk-editing of specific subsets of instruments.",
+            "Spreadsheet Navigation – Use Enter, Shift+Enter, Tab, and Shift+Tab to rapidly edit cells inline without reaching for the mouse.",
+            "Automatic Bulk Edit – Highlighting multiple rows instantly snaps the side panel into Bulk Edit mode.",
+            "Bulk Add Instruments – You can now auto-increment channels and addresses when adding multiple fixtures at once."
+        ]
+    },
     {
         version: "0.4.6",
         date: "2026-04-19",
@@ -151,7 +182,7 @@ export function PatchNotes() {
             </div>
 
             <div className="flex-1 p-8 max-w-4xl mx-auto w-full space-y-8">
-                {PATCH_NOTES.map((note, index) => (
+                {PATCH_NOTES.map((note) => (
                     <div key={note.version} className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-lg overflow-hidden">
                         <div className="px-6 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)] flex items-center justify-between">
                             <h2 className="text-lg font-bold">v{note.version} <span className="font-normal text-[var(--text-tertiary)] mx-2">|</span> {note.title}</h2>
@@ -159,8 +190,8 @@ export function PatchNotes() {
                         </div>
                         <div className="p-6">
                             <ul className="list-disc list-inside space-y-2 text-[var(--text-secondary)]">
-                                {note.changes.map((change, i) => (
-                                    <li key={i}>{change}</li>
+                                {note.changes.map((change, idx) => (
+                                    <li key={idx}>{change}</li>
                                 ))}
                             </ul>
                         </div>

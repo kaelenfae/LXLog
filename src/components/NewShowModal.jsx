@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 export function NewShowModal({ onClose, onSubmit }) {
     const [formData, setFormData] = useState({
         name: '',
-        venue: '',
         designer: '',
         director: '',
         producer: '',
@@ -31,16 +30,6 @@ export function NewShowModal({ onClose, onSubmit }) {
                             required
                             autoFocus
                             placeholder="e.g. Hamilton"
-                            autoComplete="off"
-                        />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <label className="text-[#a0a0a0] text-xs">Venue</label>
-                        <input
-                            className="bg-[#2c2c2c] border border-[#444] text-white p-2 text-sm rounded focus:border-[#007acc] outline-none"
-                            value={formData.venue}
-                            onChange={e => setFormData({ ...formData, venue: e.target.value })}
-                            placeholder="e.g. Richard Rodgers Theatre"
                             autoComplete="off"
                         />
                     </div>

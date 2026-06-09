@@ -2,18 +2,18 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { db, bulkUpdateInstruments, renumberPosition } from '../db';
+import { db, renumberPosition, ensureGenericFixture, deleteInstruments } from '../db';
 import { useSettings } from '../hooks/useSettings';
 import { formatAddress } from '../utils/addressFormatter';
-import { getGelColor } from '../utils/gelData';
 import { FilterModal } from './FilterModal';
 import { ContextMenu } from './ContextMenu';
-import { BulkEditPanel } from './BulkEditPanel';
+import { CreateInstrumentModal } from './CreateInstrumentModal';
 import { ColorSwatch } from './ColorSwatch';
 import { useToast } from './Toast';
 import { InstrumentCardList } from './InstrumentCardList';
 import { FloatingActionButton } from './FloatingActionButton';
 import classNames from 'classnames';
+import { STORAGE_KEYS } from '../constants';
 
 // Helper Component
 const SortIcon = ({ field, currentSort, direction }) => {
@@ -51,6 +51,7 @@ const IndeterminateCheckbox = ({ indeterminate, className = '', ...rest }) => {
 // Column Definitions
 const COLUMN_DEFS = [
     { id: 'channel', label: 'Ch', width: 60 },
+    { id: 'part', label: 'Part', width: 60 },
     { id: 'address', label: 'Address', width: 100 },
     { id: 'purpose', label: 'Purpose', width: 200 },
     { id: 'position', label: 'Position', width: 200 },
@@ -62,7 +63,7 @@ const COLUMN_DEFS = [
     { id: 'watt', label: 'Wattage', width: 80 }
 ];
 
-export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggleDetail }) {
+export function InstrumentSchedule({ isCollapsed, onToggleDetail }) {
     const navigate = useNavigate();
     const location = useLocation();
     const parentRef = useRef(null);
@@ -71,26 +72,36 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     // State
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [lastSelectedId, setLastSelectedId] = useState(null);
-    const [isBatchEditOpen, setIsBatchEditOpen] = useState(false);
     const [isDeleteConfirmed, setIsDeleteConfirmed] = useState(false);
     const [deleteTimer, setDeleteTimer] = useState(null);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [isColumnConfigOpen, setIsColumnConfigOpen] = useState(false); // Gear Menu State
-    const [sortField, setSortField] = useState(() => localStorage.getItem('instrumentSchedule_sortField') || 'position');
-    const [sortDirection, setSortDirection] = useState(() => localStorage.getItem('instrumentSchedule_sortDirection') || 'asc');
+    const [sortField, setSortField] = useState(() => localStorage.getItem(STORAGE_KEYS.INSTRUMENT_SCHEDULE_SORT_FIELD) || 'position');
+    const [sortDirection, setSortDirection] = useState(() => localStorage.getItem(STORAGE_KEYS.INSTRUMENT_SCHEDULE_SORT_DIRECTION) || 'asc');
     const [pendingDelete, setPendingDelete] = useState(null); // null | { ids: number[] }
     const [pendingRenumber, setPendingRenumber] = useState(null); // null | { position, ids }
+    const [showCreateModal, setShowCreateModal] = useState(false);
 
     // Column Configuration State - Persisted
     const [visibleColumns, setVisibleColumns] = useState(() => {
-        const saved = localStorage.getItem('instrumentSchedule_visibleColumns');
-        return saved ? new Set(JSON.parse(saved)) : new Set(COLUMN_DEFS.map(c => c.id));
+        const saved = localStorage.getItem(STORAGE_KEYS.INSTRUMENT_SCHEDULE_VISIBLE_COLUMNS);
+        try {
+            return saved ? new Set(JSON.parse(saved)) : new Set(COLUMN_DEFS.map(c => c.id));
+        } catch (e) {
+            console.warn('Failed to parse instrumentSchedule_visibleColumns', e);
+            return new Set(COLUMN_DEFS.map(c => c.id));
+        }
     });
 
     const [columnWidths, setColumnWidths] = useState(() => {
-        const saved = localStorage.getItem('instrumentSchedule_columnWidths');
+        const saved = localStorage.getItem(STORAGE_KEYS.INSTRUMENT_SCHEDULE_COLUMN_WIDTHS);
         const defaults = COLUMN_DEFS.reduce((acc, col) => ({ ...acc, [col.id]: col.width }), {});
-        return saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
+        try {
+            return saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
+        } catch (e) {
+            console.warn('Failed to parse instrumentSchedule_columnWidths', e);
+            return defaults;
+        }
     });
 
     const [filters, setFilters] = useState({
@@ -106,7 +117,10 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     });
 
     const [editingCell, setEditingCell] = useState(null); // { id, field, value }
+    const [activeCell, setActiveCell] = useState(null); // { id, field }
+    const [shiftAnchorId, setShiftAnchorId] = useState(null); // Anchor for keyboard shift-range selection
     const clickTimeoutRef = useRef(null);
+    const dragBaseSelectionRef = useRef(new Set());
     const [isDraggingSelection, setIsDraggingSelection] = useState(false);
     const [dragStartIndex, setDragStartIndex] = useState(null);
 
@@ -124,20 +138,41 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    // Global ESC key handler
+    useEffect(() => {
+        const handleGlobalKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                // Do not intercept if user is typing in an input/textarea
+                if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+
+                if (location.pathname.includes('/instrument')) {
+                    // Close detail panel
+                    navigate('/app', { replace: true });
+                } else if (selectedIds.size > 0) {
+                    // Deselect all
+                    setSelectedIds(new Set());
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleGlobalKeyDown);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    }, [location.pathname, selectedIds.size, navigate]);
+
     const isMobileRefresh = isMobile && mobileRefresh;
 
     // Persist Visible Columns and Widths
     useEffect(() => {
-        localStorage.setItem('instrumentSchedule_visibleColumns', JSON.stringify([...visibleColumns]));
+        localStorage.setItem(STORAGE_KEYS.INSTRUMENT_SCHEDULE_VISIBLE_COLUMNS, JSON.stringify([...visibleColumns]));
     }, [visibleColumns]);
 
     useEffect(() => {
-        localStorage.setItem('instrumentSchedule_columnWidths', JSON.stringify(columnWidths));
+        localStorage.setItem(STORAGE_KEYS.INSTRUMENT_SCHEDULE_COLUMN_WIDTHS, JSON.stringify(columnWidths));
     }, [columnWidths]);
 
     useEffect(() => {
-        localStorage.setItem('instrumentSchedule_sortField', sortField);
-        localStorage.setItem('instrumentSchedule_sortDirection', sortDirection);
+        localStorage.setItem(STORAGE_KEYS.INSTRUMENT_SCHEDULE_SORT_FIELD, sortField);
+        localStorage.setItem(STORAGE_KEYS.INSTRUMENT_SCHEDULE_SORT_DIRECTION, sortDirection);
     }, [sortField, sortDirection]);
 
     // Column Resize Handler
@@ -257,7 +292,9 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                 (i.type && i.type.toLowerCase().includes(q)) ||
                 (i.position && i.position.toLowerCase().includes(q)) ||
                 (i.address && i.address.toLowerCase().includes(q)) ||
-                (i.unit && String(i.unit).toLowerCase().includes(q))
+                (i.unit && String(i.unit).toLowerCase().includes(q)) ||
+                (i.color && i.color.toLowerCase().includes(q)) ||
+                (i.gobo && i.gobo.toLowerCase().includes(q))
             );
         }
 
@@ -348,7 +385,7 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
             const partB = b.part || 1;
             return partA - partB;
         });
-    }, [rawInstruments, filters, sortField, sortDirection, addressCounts, channelCounts]);
+    }, [rawInstruments, filters, sortField, sortDirection, addressCounts, channelCounts, dynamicColumns]);
 
     // Flatten data for Virtualizer
     const rowItems = useMemo(() => {
@@ -417,6 +454,7 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                 id: inst.id,
                 isPart,
                 isMultiPartGroup,
+                isGroupStart,
                 formattedAddress,
                 addressRange
             });
@@ -427,6 +465,8 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     const rowVirtualizer = useVirtualizer({
         count: rowItems.length,
         getScrollElement: () => parentRef.current,
+        scrollPaddingStart: 40, // Offset for the h-10 (40px) sticky thead
+        scrollPaddingEnd: 40, // Offset to prevent the horizontal scrollbar from obscuring the active row
         estimateSize: (i) => {
             const item = rowItems[i];
             // Estimate size
@@ -463,6 +503,31 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
         window.addEventListener('mouseup', handleMouseUp);
         return () => window.removeEventListener('mouseup', handleMouseUp);
     }, []);
+
+    // Auto-navigate to bulk edit when multiple items are selected
+    useEffect(() => {
+        if (location.pathname.startsWith('/app/instrument/new')) return;
+
+        if (selectedIds.size > 1) {
+            // Check if we are already in bulk edit with the exact same ids to prevent loops
+            const currentIds = location.state?.ids || [];
+            const isSameIds = currentIds.length === selectedIds.size && currentIds.every(id => selectedIds.has(id));
+            
+            if (!location.pathname.includes('/app/instrument/bulk') || !isSameIds) {
+                navigate('/app/instrument/bulk', { state: { ids: [...selectedIds], preventFocus: true }, replace: true });
+            }
+        } else if (selectedIds.size === 1) {
+            const [id] = Array.from(selectedIds);
+            if (!location.pathname.includes(`/app/instrument/${id}`)) {
+                navigate(`/app/instrument/${id}`, { state: { preventFocus: true }, replace: true });
+            }
+        } else if (selectedIds.size === 0) {
+            // If they deselect everything, clear the details pane by going to /app
+            if (location.pathname.includes('/app/instrument/')) {
+                navigate('/app', { replace: true });
+            }
+        }
+    }, [selectedIds, location.pathname, location.state?.ids, navigate]);
 
     const toggleSelection = (id, e) => {
         e?.stopPropagation();
@@ -538,6 +603,12 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     };
 
     const handleCellClick = (e, inst, field) => {
+        // Set active cell and focus the table
+        setActiveCell({ id: inst.id, field });
+        if (parentRef.current && document.activeElement !== parentRef.current) {
+            parentRef.current.focus();
+        }
+
         // Clear any existing timeout to prevent single-click navigation on double-click
         if (clickTimeoutRef.current) {
             clearTimeout(clickTimeoutRef.current);
@@ -545,9 +616,8 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
             return;
         }
 
-        // 1. Modifiers -> Selection (Immediate)
+        // 1. Modifiers -> Selection (Immediate - handled on onMouseDown already)
         if (e.ctrlKey || e.metaKey || e.shiftKey) {
-            toggleSelection(inst.id, e);
             e.stopPropagation();
             return;
         }
@@ -563,27 +633,142 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                 navigate('/app/instrument/bulk', {
                     state: {
                         ids: [...selectedIds],
-                        focusField: field
-                    }
+                        focusField: field,
+                        preventFocus: false
+                    },
+                    replace: true
                 });
                 return;
             }
 
             // 3. Single Edit Mode
-            setSelectedIds(new Set()); // Clear selection on single edit
-            navigate(`/app/instrument/${inst.id}`, { state: { focusField: field } });
+            // Clear selection and select only this cell
+            setSelectedIds(new Set([inst.id])); 
+            setLastSelectedId(inst.id);
+            navigate(`/app/instrument/${inst.id}`, { state: { focusField: field, preventFocus: false }, replace: true });
+            
         }, 200); // 200ms is usually enough to detect a double click
     };
 
-    const handleBulkSave = async (updates, noteText) => {
-        if (selectedIds.size === 0) return;
-        try {
-            await bulkUpdateInstruments([...selectedIds], updates, noteText);
-            setIsBatchEditOpen(false);
-            setSelectedIds(new Set());
-        } catch (err) {
-            console.error("Batch update failed", err);
-            toast.error("Failed to update instruments");
+    const handleTableKeyDown = (e) => {
+        if (editingCell) return;
+
+        let currentInstId = activeCell?.id;
+        let currentColId = activeCell?.field;
+
+        // If no active cell, try to start from the last selected item or the very first item
+        if (!currentInstId) {
+            if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+            
+            currentInstId = lastSelectedId || (filteredInstruments.length > 0 ? filteredInstruments[0].id : null);
+            currentColId = visibleCols[0]?.id;
+            
+            if (!currentInstId || !currentColId) return;
+            
+            e.preventDefault();
+            setActiveCell({ id: currentInstId, field: currentColId });
+            
+            if (!e.shiftKey) {
+                setSelectedIds(new Set([currentInstId]));
+                setLastSelectedId(currentInstId);
+                navigate(`/app/instrument/${currentInstId}`, { state: { preventFocus: true } });
+            }
+            return;
+        }
+
+        // Prevent default scrolling for arrows
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            e.preventDefault();
+        } else if (e.key === 'Tab') {
+            e.preventDefault();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const inst = filteredInstruments.find(i => i.id === currentInstId);
+            const col = visibleCols.find(c => c.id === currentColId);
+            if (inst && col) {
+                const val = col.isCustom ? (inst.customFields ? inst.customFields[col.id] : '') : inst[col.id];
+                setEditingCell({ id: inst.id, field: col.id, isCustom: !!col.isCustom, value: val || '' });
+            }
+            return;
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+            e.preventDefault();
+            if (selectedIds.size > 0) {
+                handleDeleteSelected();
+            }
+            return;
+        } else {
+            return;
+        }
+
+        // Find current instrument index in filtered data
+        const currentIndex = filteredInstruments.findIndex(i => i.id === currentInstId);
+        if (currentIndex === -1) return;
+        
+        // Find current column index
+        const colIndex = visibleCols.findIndex(c => c.id === currentColId);
+        if (colIndex === -1) return;
+
+        let nextInst = filteredInstruments[currentIndex];
+        let nextCol = visibleCols[colIndex];
+        let changed = false;
+
+        if ((e.key === 'ArrowUp') && currentIndex > 0) {
+            nextInst = filteredInstruments[currentIndex - 1];
+            changed = true;
+        } else if ((e.key === 'ArrowDown') && currentIndex < filteredInstruments.length - 1) {
+            nextInst = filteredInstruments[currentIndex + 1];
+            changed = true;
+        } else if ((e.key === 'ArrowLeft' || (e.key === 'Tab' && e.shiftKey)) && colIndex > 0) {
+            nextCol = visibleCols[colIndex - 1];
+            // Reset shift anchor on column moves — row shift-select starts fresh
+            setShiftAnchorId(null);
+            changed = true;
+        } else if ((e.key === 'ArrowRight' || (e.key === 'Tab' && !e.shiftKey)) && colIndex < visibleCols.length - 1) {
+            nextCol = visibleCols[colIndex + 1];
+            // Reset shift anchor on column moves
+            setShiftAnchorId(null);
+            changed = true;
+        }
+
+        if (changed) {
+            setActiveCell({ id: nextInst.id, field: nextCol.id });
+            
+            // Scroll into view - use requestAnimationFrame to defer until after React state batching & router navigation
+            const rowItemIndex = rowItems.findIndex(r => r.type === 'instrument' && r.data.id === nextInst.id);
+            if (rowItemIndex !== -1) {
+                requestAnimationFrame(() => {
+                    rowVirtualizer.scrollToIndex(rowItemIndex, { align: 'auto' });
+                });
+            }
+            
+            // Update selection and navigate
+            if (!e.shiftKey) {
+                // Clear shift anchor on non-shift moves
+                setShiftAnchorId(null);
+                setSelectedIds(new Set([nextInst.id]));
+                setLastSelectedId(nextInst.id);
+                navigate(`/app/instrument/${nextInst.id}`, { state: { preventFocus: true } });
+            } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                // Anchor-based range: establish anchor on first shift-move
+                const anchor = shiftAnchorId || currentInstId;
+                if (!shiftAnchorId) setShiftAnchorId(currentInstId);
+
+                const anchorIndex = filteredInstruments.findIndex(i => i.id === anchor);
+                const nextIndex = filteredInstruments.findIndex(i => i.id === nextInst.id);
+
+                if (anchorIndex !== -1 && nextIndex !== -1) {
+                    const rangeStart = Math.min(anchorIndex, nextIndex);
+                    const rangeEnd = Math.max(anchorIndex, nextIndex);
+
+                    // Select exactly the range from anchor to next, deselecting anything outside
+                    const newSelected = new Set();
+                    for (let i = rangeStart; i <= rangeEnd; i++) {
+                        newSelected.add(filteredInstruments[i].id);
+                    }
+                    setSelectedIds(newSelected);
+                    setLastSelectedId(nextInst.id);
+                }
+            }
         }
     };
 
@@ -592,14 +777,14 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
         try {
             const selectedInstruments = await db.instruments.where('id').anyOf([...selectedIds]).toArray();
             const newInstruments = selectedInstruments.map(inst => {
-                const { id, ...rest } = inst;
+                const { id: _id, ...rest } = inst;
                 return { ...rest };
             });
             await db.instruments.bulkAdd(newInstruments);
             setSelectedIds(new Set());
         } catch (err) {
-            console.error("Duplicate failed", err);
-            toast.error("Failed to duplicate instruments");
+            console.error('Duplicate failed', err);
+            toast.error('Failed to duplicate instruments');
         }
     };
 
@@ -654,10 +839,7 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
         setIsDeleteConfirmed(false);
         if (ids.length === 0) return;
         try {
-            await db.transaction('rw', [db.instruments, db.instrumentNotes], async () => {
-                await db.instruments.bulkDelete(ids);
-                await db.instrumentNotes.where('instrumentId').anyOf(ids).delete();
-            });
+            await deleteInstruments(ids);
             setSelectedIds(new Set());
         } catch (err) {
             console.error('Delete failed', err);
@@ -667,12 +849,72 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
 
     const handleDuplicateSingle = async (inst) => {
         try {
-            const { id, ...rest } = inst;
+            const { id: _id, ...rest } = inst;
             await db.instruments.add({ ...rest });
         } catch (err) {
-            console.error("Duplicate failed", err);
-            toast.error("Failed to duplicate instrument");
+            console.error('Duplicate failed', err);
+            toast.error('Failed to duplicate instrument');
         }
+    };
+
+    const handleCombineIntoParts = async () => {
+        let ids = selectedIds.size > 0 ? [...selectedIds] : [];
+        if (ids.length <= 1 && contextMenu?.instrument) {
+            const channel = contextMenu.instrument.channel;
+            if (channel) {
+                const sameChannelInsts = await db.instruments.where('channel').equals(String(channel)).toArray();
+                ids = sameChannelInsts.map(i => i.id);
+            }
+        }
+
+        if (ids.length <= 1) {
+            toast.error("Please select 2 or more instruments to combine them into parts.");
+            return;
+        }
+
+        const selectedInsts = await db.instruments.where('id').anyOf(ids).toArray();
+        
+        // Find most common channel or first channel as default
+        const channels = selectedInsts.map(i => i.channel).filter(Boolean);
+        const defaultChannel = channels[0] || '';
+
+        const targetChannel = prompt("Enter the channel number to combine these instruments under:", defaultChannel);
+        if (targetChannel === null) return; // Cancelled
+        
+        const chanNum = targetChannel.trim();
+        if (!chanNum) {
+            toast.error("Channel number cannot be empty.");
+            return;
+        }
+
+        // Sort instruments by position and unit to have a logical order for parts
+        selectedInsts.sort((a, b) => {
+            const posA = a.position || '';
+            const posB = b.position || '';
+            const cmpPos = posA.localeCompare(posB, undefined, { numeric: true });
+            if (cmpPos !== 0) return cmpPos;
+            const unitA = a.unit || '';
+            const unitB = b.unit || '';
+            return unitA.localeCompare(unitB, undefined, { numeric: true });
+        });
+
+        try {
+            await db.transaction('rw', db.instruments, async () => {
+                for (let i = 0; i < selectedInsts.length; i++) {
+                    const inst = selectedInsts[i];
+                    await db.instruments.update(inst.id, {
+                        channel: chanNum,
+                        part: i + 1
+                    });
+                }
+            });
+            toast.success(`Combined ${selectedInsts.length} instruments under Channel ${chanNum} with parts.`);
+        } catch (err) {
+            console.error('Combine failed', err);
+            toast.error('Failed to combine instruments');
+        }
+
+        setContextMenu(null);
     };
 
     const handleSelectAllSameType = (type) => {
@@ -717,21 +959,98 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
                 };
                 await db.instruments.update(id, updates);
             } else {
-                const updates = { [field]: value };
+                let parsedValue = value;
+                if (field === 'part') {
+                    parsedValue = value ? (parseInt(value, 10) || '') : '';
+                }
+                const updates = { [field]: parsedValue };
+                if (field === 'type' && value) {
+                    const fixtureTypeId = await ensureGenericFixture(value);
+                    if (fixtureTypeId) updates.fixtureTypeId = fixtureTypeId;
+                }
                 await db.instruments.update(id, updates);
             }
-            setEditingCell(null);
+            setEditingCell(prev => {
+                if (prev && prev.id === id && prev.field === field) return null;
+                return prev;
+            });
         } catch (err) {
-            console.error("Inline save failed", err);
-            toast.error("Failed to save change");
+            console.error('Inline save failed', err);
+            toast.error('Failed to save change');
         }
     };
 
     const handleInlineKeyDown = (e, id, isCustom, field, value) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Start the save process for the current cell
             handleInlineSave(id, isCustom, field, value);
+
+            const currentRowIndex = filteredInstruments.findIndex(i => i.id === id);
+            const currentColIndex = visibleCols.findIndex(c => c.id === field);
+            
+            if (currentRowIndex === -1 || currentColIndex === -1) return;
+
+            let nextRowIndex = currentRowIndex;
+            let nextColIndex = currentColIndex;
+
+            if (e.key === 'Enter') {
+                if (e.shiftKey) {
+                    nextRowIndex = Math.max(0, currentRowIndex - 1);
+                } else {
+                    nextRowIndex = Math.min(filteredInstruments.length - 1, currentRowIndex + 1);
+                }
+            } else if (e.key === 'Tab') {
+                if (e.shiftKey) {
+                    nextColIndex = Math.max(0, currentColIndex - 1);
+                } else {
+                    nextColIndex = Math.min(visibleCols.length - 1, currentColIndex + 1);
+                }
+            }
+
+            // If we actually moved
+            if (nextRowIndex !== currentRowIndex || nextColIndex !== currentColIndex) {
+                const nextInst = filteredInstruments[nextRowIndex];
+                const nextCol = visibleCols[nextColIndex];
+                
+                setActiveCell({ id: nextInst.id, field: nextCol.id });
+                
+                // Only change row selection if we moved rows
+                if (nextRowIndex !== currentRowIndex) {
+                    setSelectedIds(new Set([nextInst.id]));
+                    setLastSelectedId(nextInst.id);
+                    setShiftAnchorId(null);
+                    // Update URL to match selection
+                    navigate(`/app/instrument/${nextInst.id}`, { state: { preventFocus: true }, replace: true });
+                }
+                
+                // Immediately enter edit mode for the target cell
+                const val = nextCol.isCustom ? (nextInst.customFields ? nextInst.customFields[nextCol.id] : '') : nextInst[nextCol.id];
+                setEditingCell({ id: nextInst.id, field: nextCol.id, isCustom: !!nextCol.isCustom, value: val || '' });
+
+                // Scroll the new row into view if we moved rows
+                if (nextRowIndex !== currentRowIndex) {
+                    const rowItemIndex = rowItems.findIndex(r => r.type === 'instrument' && r.data.id === nextInst.id);
+                    if (rowItemIndex !== -1) {
+                        requestAnimationFrame(() => {
+                            rowVirtualizer.scrollToIndex(rowItemIndex, { align: 'auto' });
+                        });
+                    }
+                }
+            } else {
+                // Return focus to table container if we can't move any further in that direction
+                setTimeout(() => {
+                    if (parentRef.current) parentRef.current.focus();
+                }, 0);
+            }
         } else if (e.key === 'Escape') {
             setEditingCell(null);
+            // Return focus to the table so arrow navigation resumes immediately
+            setTimeout(() => {
+                if (parentRef.current) parentRef.current.focus();
+            }, 0);
         }
     };
 
@@ -741,26 +1060,8 @@ export function InstrumentSchedule({ isMasterView = false, isCollapsed, onToggle
     const allSelected = filteredInstruments.length > 0 && selectedIds.size === filteredInstruments.length;
     const isIndeterminate = selectedIds.size > 0 && selectedIds.size < filteredInstruments.length;
 
-    const activeFilterCount = Object.keys(filters).reduce((acc, key) => {
-        if (key === 'type' || key === 'position' || key === 'color' || key === 'gobo') {
-            return acc + (filters[key] !== 'All' ? 1 : 0);
-        }
-        if (typeof filters[key] === 'boolean') {
-            return acc + (filters[key] ? 1 : 0);
-        }
-        if (key === 'searchQuery') {
-            return acc + (filters[key] ? 1 : 0);
-        }
-        return acc;
-    }, 0);
-
-    // Calculate Grid Template based on visible columns (using pixel widths)
     const visibleCols = dynamicColumns.filter(c => visibleColumns.has(c.id));
-    const gridTemplateCols = [
-        "40px", // Checkbox
-        ...visibleCols.map(c => `${columnWidths[c.id]}px`)
-    ].join(' ');
-const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id] || 0), 0);
+    const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id] || 0), 0);
 
     return (
         <div className="flex flex-col h-full relative bg-[var(--bg-app)] min-h-0">
@@ -785,6 +1086,24 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
                     <h1 className="text-xl font-bold tracking-tight text-[var(--text-primary)]">Instrument Schedule</h1>
                 </div>
                 <div className="flex gap-3 items-center">
+                    {/* Search Bar - Desktop */}
+                    {!isMobileRefresh && (
+                        <div className="relative mr-2 flex items-center">
+                            <div className="absolute left-3 flex items-center justify-center pointer-events-none text-[var(--text-tertiary)]">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search criteria..."
+                                value={filters.searchQuery}
+                                onChange={(e) => setFilters(prev => ({ ...prev, searchQuery: e.target.value }))}
+                                style={{ paddingLeft: '32px' }}
+                                className="w-48 pr-3 py-1.5 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-lg text-sm text-[var(--text-primary)] focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--accent-primary)] outline-none transition-all placeholder-[var(--text-tertiary)]"
+                            />
+                        </div>
+                    )}
                     {/* Gear Menu for Columns - Hide on mobile refresh */}
                     {!isMobileRefresh && (
                         <div className="relative">
@@ -830,7 +1149,7 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
                     )}
                     <div className={classNames("h-6 w-px bg-[var(--border-subtle)] mx-1", { "hidden": isMobileRefresh })}></div>
 
-                    <button className={classNames("primary text-xs shadow-lg shadow-indigo-500/20", { "hidden": isMobileRefresh })} onClick={() => navigate('/app/instrument/new')}>Add Instrument</button>
+                    <button className={classNames("primary text-xs shadow-lg shadow-indigo-500/20", { "hidden": isMobileRefresh })} onClick={() => setShowCreateModal(true)}>Add Instrument</button>
 
                     {/* Detail Open Button - Only when Collapsed */}
                     {onToggleDetail && isCollapsed && (
@@ -848,29 +1167,36 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
             {/* Conditional Sub-header for Mobile Search/Filter */}
             {isMobileRefresh && (
                 <div className="px-4 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-app)] flex items-center gap-2">
-                    <div className="relative flex-1">
+                    <div className="relative flex-1 flex items-center">
+                        <div className="absolute left-3 flex items-center justify-center pointer-events-none text-[var(--text-tertiary)]">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
                         <input
                             type="text"
                             placeholder="Search instruments..."
                             value={filters.searchQuery}
                             onChange={(e) => setFilters(prev => ({ ...prev, searchQuery: e.target.value }))}
-                            className="w-full pl-9 pr-4 py-2 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-xl text-sm focus:border-[var(--accent-primary)] outline-none"
+                            style={{ paddingLeft: '32px' }}
+                            className="w-full pr-4 py-2 bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-xl text-sm focus:border-[var(--accent-primary)] outline-none"
                         />
-                        <svg className="w-4 h-4 absolute left-3 top-2.5 text-[var(--text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
                     </div>
                 </div>
             )}
 
             {/* Content Area */}
             <div 
+                id="instrument-schedule-container"
                 ref={parentRef} 
-                className="flex-1 overflow-auto relative select-none w-full"
+                className="flex-1 overflow-auto relative select-none w-full outline-none"
+                tabIndex={0}
+                onKeyDown={handleTableKeyDown}
                 onMouseDown={(e) => {
                     // Clear selection if clicking exactly the container or the table (but not rows/cells)
                     if (e.target === parentRef.current || e.target.tagName === 'TABLE' || e.target.tagName === 'TBODY') {
                         setSelectedIds(new Set());
+                        setActiveCell(null);
                     }
                 }}
             >
@@ -987,6 +1313,7 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
                             const inst = item.data;
                             // Extract flags from item metadata
                             const isMultiPartGroup = item.isMultiPartGroup;
+                            const isGroupStart = item.isGroupStart;
 
                             const isAddrDuplicate = inst.address && inst.address !== '0:0' && inst.address !== '0' && addressCounts[inst.address] > 1;
                             const isChanDuplicate = inst.channel && channelCounts[String(inst.channel)] > 1;
@@ -1007,18 +1334,63 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
                                         setDragStartIndex(virtualRow.index);
                                         
                                         const hasModifiers = e.ctrlKey || e.metaKey || e.shiftKey;
+                                        let initialSelection = new Set();
                                         if (!hasModifiers) {
-                                            setSelectedIds(new Set([inst.id]));
+                                            initialSelection = new Set([inst.id]);
+                                            setSelectedIds(initialSelection);
                                             setLastSelectedId(inst.id);
                                         } else {
-                                            toggleSelection(inst.id, e);
+                                            if (e.shiftKey) {
+                                                const clickedIndex = filteredInstruments.findIndex(i => i.id === inst.id);
+                                                let anchorIndex = -1;
+                                                if (lastSelectedId) {
+                                                    anchorIndex = filteredInstruments.findIndex(i => i.id === lastSelectedId);
+                                                }
+                                                if (anchorIndex === -1 && selectedIds.size > 0) {
+                                                    let firstIdx = -1;
+                                                    let lastIdx = -1;
+                                                    filteredInstruments.forEach((i, idx) => {
+                                                        if (selectedIds.has(i.id)) {
+                                                            if (firstIdx === -1) firstIdx = idx;
+                                                            lastIdx = idx;
+                                                        }
+                                                    });
+                                                    if (firstIdx !== -1) {
+                                                        if (clickedIndex < firstIdx) anchorIndex = firstIdx;
+                                                        else if (clickedIndex > lastIdx) anchorIndex = lastIdx;
+                                                        else anchorIndex = firstIdx;
+                                                    }
+                                                }
+                                                initialSelection = new Set(selectedIds);
+                                                if (anchorIndex !== -1) {
+                                                    const startRange = Math.min(anchorIndex, clickedIndex);
+                                                    const endRange = Math.max(anchorIndex, clickedIndex);
+                                                    for (let i = startRange; i <= endRange; i++) {
+                                                        initialSelection.add(filteredInstruments[i].id);
+                                                    }
+                                                } else {
+                                                    initialSelection.add(inst.id);
+                                                    setLastSelectedId(inst.id);
+                                                }
+                                                setSelectedIds(initialSelection);
+                                            } else {
+                                                initialSelection = new Set(selectedIds);
+                                                if (initialSelection.has(inst.id)) {
+                                                    initialSelection.delete(inst.id);
+                                                } else {
+                                                    initialSelection.add(inst.id);
+                                                    setLastSelectedId(inst.id);
+                                                }
+                                                setSelectedIds(initialSelection);
+                                            }
                                         }
+                                        dragBaseSelectionRef.current = initialSelection;
                                     }}
                                     onMouseEnter={() => {
                                         if (isDraggingSelection && dragStartIndex !== null) {
                                             const start = Math.min(dragStartIndex, virtualRow.index);
                                             const end = Math.max(dragStartIndex, virtualRow.index);
-                                            const newSelection = new Set(selectedIds);
+                                            const newSelection = new Set(dragBaseSelectionRef.current);
                                             
                                             for (let i = start; i <= end; i++) {
                                                 const rowItem = rowItems[i];
@@ -1052,20 +1424,33 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
                                     }}
                                 >
                                     {/* Checkbox */}
-                                    <td className="p-0 border-r border-[var(--border-subtle)] text-center relative w-[40px] max-w-[40px]">
-                                        <div className="flex justify-center items-center h-full w-full pointer-events-none">
+                                    <td className="p-0 border-r border-[var(--border-subtle)] text-center relative w-[40px] max-w-[40px] no-drag">
+                                        <div 
+                                            className="flex justify-center items-center h-full w-full cursor-pointer no-drag"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleSelection(inst.id, e);
+                                            }}
+                                        >
                                             <input
                                                 type="checkbox"
                                                 checked={!!selected}
                                                 onChange={() => { }}
-                                                className="rounded border-gray-600 bg-[#2b2b30] checked:bg-[var(--accent-primary)] focus:ring-[var(--accent-primary)]"
+                                                className="pointer-events-none rounded border-gray-600 bg-[#2b2b30] checked:bg-[var(--accent-primary)] focus:ring-[var(--accent-primary)]"
                                             />
                                         </div>
                                     </td>
 
                                     {/* Columns */}
                                     {visibleCols.map(col => {
-                                        const cellClass = classNames("px-3 border-r border-[var(--border-subtle)] overflow-hidden whitespace-nowrap h-full relative", { "text-xs px-2": isCompact });
+                                        const isActive = activeCell && activeCell.id === inst.id && activeCell.field === col.id;
+                                        const cellClass = classNames(
+                                            "px-3 border-r border-[var(--border-subtle)] overflow-hidden whitespace-nowrap h-full relative outline-none",
+                                            { 
+                                                "text-xs px-2": isCompact,
+                                                "ring-2 ring-inset ring-[var(--accent-primary)] bg-[var(--accent-primary)]/10 z-10": isActive
+                                            }
+                                        );
                                         const commonProps = {
                                             onClick: (e) => handleCellClick(e, inst, col.id),
                                             onDoubleClick: (e) => {
@@ -1239,9 +1624,20 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                             Duplicate
                         </button>
+                        {selectedIds.size > 1 && (
+                            <button
+                                className="text-xs px-3 py-1.5 rounded bg-[var(--bg-card)] border border-[var(--border-default)] hover:border-[var(--text-primary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-2 font-semibold"
+                                onClick={handleCombineIntoParts}
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                                Combine into Parts
+                            </button>
+                        )}
                         <button
                             className="text-xs px-4 py-1.5 rounded bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)] transition-colors shadow-lg shadow-indigo-500/20 font-bold flex items-center gap-2"
-                            onClick={() => setIsBatchEditOpen(true)}
+                            onClick={() => {
+                                navigate('/app/instrument/bulk', { state: { ids: [...selectedIds] } });
+                            }}
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             Bulk Edit
@@ -1267,14 +1663,6 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
                 />
             )}
 
-            {isBatchEditOpen && (
-                <BulkEditPanel
-                    selectedCount={selectedIds.size}
-                    onUpdate={handleBulkSave}
-                    onClose={() => setIsBatchEditOpen(false)}
-                />
-            )}
-
             {/* Context Menu */}
             {contextMenu && (
                 <ContextMenu
@@ -1292,6 +1680,12 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
                             label: 'Duplicate',
                             icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
                             onClick: () => selectedIds.size > 1 ? handleDuplicate() : handleDuplicateSingle(contextMenu.instrument)
+                        },
+                        {
+                            label: 'Combine into Parts',
+                            icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>,
+                            onClick: handleCombineIntoParts,
+                            disabled: selectedIds.size <= 1 && (!contextMenu.instrument.channel || channelCounts[String(contextMenu.instrument.channel)] <= 1)
                         },
                         { separator: true },
                         {
@@ -1321,6 +1715,22 @@ const totalWidth = 40 + visibleCols.reduce((sum, c) => sum + (columnWidths[c.id]
                             shortcut: 'Del'
                         }
                     ]}
+                />
+            )}
+
+            {showCreateModal && (
+                <CreateInstrumentModal 
+                    onClose={() => setShowCreateModal(false)}
+                    onCreated={(newIds) => {
+                        setShowCreateModal(false);
+                        if (newIds.length === 1) {
+                            navigate(`/app/instrument/${newIds[0]}`);
+                        } else if (newIds.length > 1) {
+                            setSelectedIds(new Set(newIds));
+                            setLastSelectedId(newIds[newIds.length - 1]);
+                            navigate(`/app/instrument/${newIds[newIds.length - 1]}`, { state: { preventFocus: true } });
+                        }
+                    }}
                 />
             )}
         </div>

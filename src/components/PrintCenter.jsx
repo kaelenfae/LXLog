@@ -11,6 +11,8 @@ import { PDFCoverPage } from './PDFCoverPage';
 // PDF components
 import { ChannelHookupPDF } from './ChannelHookupPDF';
 import { HangingSchedulePDF } from './HangingSchedulePDF';
+
+import { sortInstrumentsByChannel, processChannelDisplayOptions } from '../utils/channelUtils';
 import { PatchPDF } from './PatchPDF';
 import { EquipmentListPDF } from './EquipmentListPDF';
 import { CuttingListPDF } from './CuttingListPDF';
@@ -73,7 +75,7 @@ export function PrintCenter() {
                 const processedData = sortedInstruments.map(inst => ({
                     ...inst,
                     displayChannel: inst.channel || '-',
-                    displayAddress: formatAddress(inst.address, inst.universe, addressMode, showUniverse1, universeSeparator)
+                    displayAddress: formatAddress(inst.address, addressMode, showUniverse1, universeSeparator)
                 }));
                 const defaultCols = ['channel', 'address', 'position', 'unit', 'type', 'watt', 'purpose', 'color', 'notes'];
                 return (
@@ -90,11 +92,23 @@ export function PrintCenter() {
             }
             case 'hanging-schedule': {
                 const defaultLabels = {
-                    position: 'Position', unit: 'Unit', type: 'Type', watt: 'Watt',
-                    purpose: 'Purpose', color: 'Color', channel: 'Channel', address: 'Address',
+                    position: 'Position', unit: 'Unit', type: 'Type', distance: 'Dist Center', watt: 'Wattage',
+                    purpose: 'Purpose', color: 'Color', gobo: 'Gobo', channel: 'Channel', address: 'Address',
                     circuit: 'Circuit', dimmer: 'Dimmer', notes: 'Notes'
                 };
-                const defaultVisible = { position: true, unit: true, type: true, channel: true, address: true, purpose: true, color: true };
+                const defaultVisible = {
+                    position: true,
+                    unit: true,
+                    type: true,
+                    distance: true,
+                    watt: true,
+                    purpose: true,
+                    color: true,
+                    gobo: true,
+                    channel: true,
+                    address: true
+                };
+                const defaultOrder = ['position', 'unit', 'type', 'distance', 'watt', 'purpose', 'color', 'gobo', 'channel', 'address'];
                 return (
                     <HangingSchedulePDF
                         key="hanging-schedule"
@@ -102,6 +116,7 @@ export function PrintCenter() {
                         instruments={instruments}
                         visibleColumns={defaultVisible}
                         columnLabels={defaultLabels}
+                        columnOrder={defaultOrder}
                         includeCover={false}
                         orientation={orientation}
                         channelDisplayMode={channelDisplayMode}
@@ -113,25 +128,9 @@ export function PrintCenter() {
                 );
             }
             case 'patch': {
-                const sorted = [...instruments].sort((a, b) => {
-                    const chanA = parseFloat(a.channel) || 0;
-                    const chanB = parseFloat(b.channel) || 0;
-                    return chanA - chanB;
-                });
-                let lastChannel = null;
-                const processedData = sorted.map(inst => {
-                    const item = { ...inst };
-                    const isSecondary = item.channel === lastChannel && item.part;
-                    if (isSecondary) {
-                        if (channelDisplayMode === 'parts') item.displayChannel = `P${item.part || 1}`;
-                        else if (channelDisplayMode === 'dots') item.displayChannel = `.${item.part || 1}`;
-                        else if (channelDisplayMode === 'hide') item.displayChannel = '';
-                        else item.displayChannel = item.channel;
-                    } else {
-                        item.displayChannel = item.channel || '-';
-                        lastChannel = item.channel;
-                    }
-                    item.address = formatAddress(inst.address, inst.universe, addressMode, showUniverse1, universeSeparator);
+                const sorted = sortInstrumentsByChannel([...instruments]);
+                const processedData = processChannelDisplayOptions(sorted, channelDisplayMode).map(item => {
+                    item.address = formatAddress(item.address, addressMode, showUniverse1, universeSeparator);
                     return item;
                 });
                 return (

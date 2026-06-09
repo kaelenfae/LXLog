@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer';
 import { PDFCoverPage } from './PDFCoverPage';
 import { PDFHeader, PDFFooter, pdfStyles } from './PDFReportLayout';
+import { getGelColor } from '../utils/gelData';
 
 const styles = StyleSheet.create({
     section: { marginBottom: 10 },
@@ -23,6 +24,7 @@ const styles = StyleSheet.create({
     cell: { fontSize: 8, padding: 3 },
     headerCell: { fontSize: 7, fontWeight: 'bold', textTransform: 'uppercase', padding: 3 },
     spacer: { height: 6 },
+    colorSwatch: { width: 10, height: 10, borderRadius: 5, marginRight: 5, borderWidth: 1, borderColor: '#cccccc' }
 });
 
 const COL_WIDTHS = {
@@ -30,7 +32,7 @@ const COL_WIDTHS = {
     purpose: '20%', position: '15%', color: '10%',
 };
 
-export const ChannelHookupPDF = ({ showInfo, processedData, visibleColumnOrder, columnLabels, includeCover = true, orientation = 'portrait', standalone = true }) => {
+export const ChannelHookupPDF = ({ showInfo, processedData, visibleColumnOrder, includeCover = true, orientation = 'portrait', standalone = true, showSwatches = true }) => {
     const getLabel = (id) => {
         const labels = { channel: 'Ch', address: 'Addr', type: 'Type', watt: 'Watt', purpose: 'Purpose', position: 'Position', color: 'Color' };
         return labels[id] || id;
@@ -68,7 +70,10 @@ export const ChannelHookupPDF = ({ showInfo, processedData, visibleColumnOrder, 
                             {needsSpacing && <View style={styles.spacer} />}
                             <View style={[styles.tableRow, { backgroundColor: idx % 2 === 1 ? '#f9fafb' : '#fff' }]}>
                                 {visibleColumnOrder.map(colId => (
-                                    <View key={colId} style={[styles.cell, { width: COL_WIDTHS[colId] || '10%' }]}>
+                                    <View key={colId} style={[styles.cell, { width: COL_WIDTHS[colId] || '10%', flexDirection: 'row', alignItems: 'center' }]}>
+                                        {colId === 'color' && showSwatches && inst.color && (
+                                            <View style={[styles.colorSwatch, { backgroundColor: getGelColor(inst.color) || '#ffffff' }]} />
+                                        )}
                                         <Text style={colId === 'channel' && isNewChannel ? { fontWeight: 'bold', fontSize: 10 } : {}}>
                                             {getCellValue(inst, colId)}
                                         </Text>

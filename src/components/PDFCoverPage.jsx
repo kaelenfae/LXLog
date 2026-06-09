@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text, Page } from '@react-pdf/renderer';
+import { STORAGE_KEYS } from '../constants';
 
 const styles = StyleSheet.create({
     page: {
@@ -99,13 +100,15 @@ export const PDFCoverPage = ({ showInfo, reportTitle, includedReports = [] }) =>
     // Custom data fields (from showMetadata.customFields if any)
     const customData = showInfo.customFields || {};
     const customEntries = Object.entries(customData)
-        .filter(([_, val]) => val && String(val).trim() !== '');
+        .filter(([, val]) => val && String(val).trim() !== '');
+
+    const venueName = localStorage.getItem(STORAGE_KEYS.VENUE_NAME) || '';
 
     return (
         <Page size="A4" style={styles.page}>
             <View style={styles.topBar} />
 
-            {showInfo.venue && <Text style={styles.venue}>{showInfo.venue}</Text>}
+            {venueName ? <Text style={styles.venue}>{venueName}</Text> : null}
             <Text style={styles.showTitle}>{showInfo.name || 'Untitled Show'}</Text>
 
             <View style={{ width: '100%', alignItems: 'center' }}>

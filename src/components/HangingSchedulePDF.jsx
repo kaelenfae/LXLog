@@ -3,6 +3,8 @@ import { StyleSheet, View, Text, Document, Page } from '@react-pdf/renderer';
 import { PDFCoverPage } from './PDFCoverPage';
 import { PDFHeader, PDFFooter, pdfStyles } from './PDFReportLayout';
 import { formatAddress } from '../utils/addressFormatter';
+import { formatChannelDisplay } from '../utils/channelUtils';
+import { getGelColor } from '../utils/gelData';
 
 const styles = StyleSheet.create({
     section: {
@@ -70,7 +72,8 @@ const styles = StyleSheet.create({
         color: '#666666',
         marginLeft: 15,
         fontWeight: 'bold',
-    }
+    },
+    colorSwatch: { width: 10, height: 10, borderRadius: 2, marginRight: 5, borderWidth: 1, borderColor: '#cccccc' }
 });
 
 export const HangingSchedulePDF = ({
@@ -78,13 +81,15 @@ export const HangingSchedulePDF = ({
     instruments,
     visibleColumns,
     columnLabels,
+    columnOrder,
     includeCover = true,
     orientation = 'landscape',
     channelDisplayMode = 'parts',
     addressMode = 'universe',
     showUniverse1 = false,
     universeSeparator = '/',
-    standalone = true
+    standalone = true,
+    showSwatches = true
 }) => {
     // Group by position
     const positions = [...new Set(instruments.map(inst => inst.position || 'Unassigned'))].sort((a, b) => {
@@ -101,19 +106,26 @@ export const HangingSchedulePDF = ({
     // Column widths mapped to IDs
     const COL_WIDTHS = {
         unit: '8%',
-        type: '22%',
+        type: '18%',
+        distance: '10%',
         watt: '8%',
-        purpose: '20%',
+        purpose: '16%',
         color: '10%',
         gobo: '10%',
         channel: '10%',
-        address: '12%',
+        address: '10%',
         circuit: '10%',
         dimmer: '10%',
         notes: '20%'
     };
 
-    const visibleColumnIds = Object.keys(visibleColumns).filter(id => visibleColumns[id] && id !== 'position');
+    let orderToUse = columnOrder;
+    if (!orderToUse) {
+        const base = ['position', 'unit', 'type', 'distance', 'watt', 'purpose', 'color', 'gobo', 'channel', 'address'];
+        const extra = Object.keys(visibleColumns).filter(id => !base.includes(id));
+        orderToUse = [...base, ...extra];
+    }
+    const visibleColumnIds = orderToUse.filter(id => visibleColumns[id] && id !== 'position');
 
     const pages = (
         <>
@@ -147,17 +159,19 @@ export const HangingSchedulePDF = ({
                                 {posUnits.map((inst, idx) => (
                                     <View key={inst.id} style={[styles.tableRow, { backgroundColor: idx % 2 === 1 ? '#f9fafb' : '#ffffff' }]}>
                                         {visibleColumnIds.map(colId => (
-                                            <View key={colId} style={[styles.tableCell, { width: COL_WIDTHS[colId] || '10%' }]}>
+                                            <View key={colId} style={[styles.tableCell, { width: COL_WIDTHS[colId] || '10%', flexDirection: 'row', alignItems: 'center' }]}>
+                                                {colId === 'color' && showSwatches && inst.color && (
+                                                    <View style={[styles.colorSwatch, { backgroundColor: getGelColor(inst.color) || '#ffffff' }]} />
+                                                )}
                                                 <Text>
                                                     {colId === 'channel' ? (
                                                         inst.part > 1 ? (
-                                                            channelDisplayMode === 'parts' ? `P${inst.part}` :
-                                                                channelDisplayMode === 'dots' ? `.${inst.part}` :
-                                                                    channelDisplayMode === 'hide' ? '' :
-                                                                        inst.channel
+                                                            <Text style={{ fontFamily: 'Helvetica-Bold', color: '#4f46e5' }}>
+                                                                {formatChannelDisplay(inst.channel, inst.part, channelDisplayMode, true)}
+                                                            </Text>
                                                         ) : inst.channel
                                                     ) : colId === 'address' ? (
-                                                        formatAddress(inst.address, inst.universe, addressMode, showUniverse1, universeSeparator)
+                                                        formatAddress(inst.address, addressMode, showUniverse1, universeSeparator)
                                                     ) : inst[colId] || ''}
                                                 </Text>
                                             </View>

@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { ReportLayout } from './ReportLayout';
 import { getGelColor } from '../utils/gelData';
+import { STORAGE_KEYS } from '../constants';
+import { OrientationSelect } from './OrientationSelect';
 import {
     DndContext,
     closestCenter,
@@ -22,7 +24,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 // --- Instrument Cell (non-draggable) ---
-function InstrumentCell({ inst, config }) {
+function InstrumentCell({ inst }) {
     const instColor = inst.color ? getGelColor(inst.color) : null;
 
     return (
@@ -43,7 +45,7 @@ function InstrumentCell({ inst, config }) {
 
 
 // --- Sortable Group Component ---
-function SortableGroup({ id, children, accentColor, isMenuOpen, onMenuClick, className: extraClassName }) {
+function SortableGroup({ id, children, isMenuOpen, onMenuClick, className: extraClassName }) {
     const {
         attributes,
         listeners,
@@ -60,7 +62,7 @@ function SortableGroup({ id, children, accentColor, isMenuOpen, onMenuClick, cla
     };
 
     // Handle click vs drag - click opens menu, drag initiates reorder
-    const handleClick = (e) => {
+    const handleClick = () => {
         if (onMenuClick) {
             onMenuClick();
         }
@@ -105,27 +107,32 @@ function GroupDragOverlay({ group, accentColor }) {
 }
 
 export function MagicSheetReport() {
-    const [orientation, setOrientation] = React.useState('portrait');
-    const [purposeConfigs, setPurposeConfigs] = React.useState({});
-    const [editingPurpose, setEditingPurpose] = React.useState(null);
+    const [orientation, setOrientation] = useState('portrait');
+    const [purposeConfigs, setPurposeConfigs] = useState({});
+    const [editingPurpose, setEditingPurpose] = useState(null);
 
     const [activeGroupId, setActiveGroupId] = useState(null); // For group DragOverlay
     const [groupOrder, setGroupOrder] = useState(() => {
-        const saved = localStorage.getItem('magicSheet_groupOrder');
-        return saved ? JSON.parse(saved) : null; // null = use default alphabetical
+        const saved = localStorage.getItem(STORAGE_KEYS.MAGIC_SHEET_GROUP_ORDER);
+        try {
+            return saved ? JSON.parse(saved) : null; // null = use default alphabetical
+        } catch (e) {
+            console.warn('Failed to parse magicSheet_groupOrder', e);
+            return null;
+        }
     });
     const [groupByField, setGroupByField] = useState(() => {
-        return localStorage.getItem('magicSheet_groupBy') || 'purpose';
+        return localStorage.getItem(STORAGE_KEYS.MAGIC_SHEET_GROUP_BY) || 'purpose';
     });
 
     const [hideDuplicates, setHideDuplicates] = useState(() => {
-        return localStorage.getItem('magicSheet_hideDuplicates') === 'true';
+        return localStorage.getItem(STORAGE_KEYS.MAGIC_SHEET_HIDE_DUPLICATES) === 'true';
     });
 
     // --- Responsive Masonry Columns Logic ---
-    const [numCols, setNumCols] = React.useState(3);
+    const [numCols, setNumCols] = useState(3);
 
-    React.useEffect(() => {
+    useEffect(() => {
         const updateCols = () => {
             const isPrint = window.matchMedia('print').matches;
             if (isPrint) {
@@ -160,9 +167,8 @@ export function MagicSheetReport() {
     }, [orientation]);
     // ----------------------------------------
 
-    // Fetch metadata for custom field options
     const metadata = useLiveQuery(() => db.showMetadata.toArray());
-    const customFieldDefs = React.useMemo(() => {
+    const customFieldDefs = useMemo(() => {
         if (metadata && metadata[0] && metadata[0].customFieldDefinitions) {
             return metadata[0].customFieldDefinitions;
         }
@@ -170,7 +176,7 @@ export function MagicSheetReport() {
     }, [metadata]);
 
     // Available grouping options
-    const groupByOptions = React.useMemo(() => {
+    const groupByOptions = useMemo(() => {
         const base = [
             { id: 'purpose', label: 'Purpose' },
             { id: 'position', label: 'Position' },
@@ -179,7 +185,7 @@ export function MagicSheetReport() {
         ];
         // Add custom fields
         customFieldDefs.forEach(field => {
-            base.push({ id: `custom:${field} `, label: field });
+        base.push({ id: `custom:${field}`, label: field });
         });
         return base;
     }, [customFieldDefs]);
@@ -195,19 +201,23 @@ export function MagicSheetReport() {
         })
     );
 
-    React.useEffect(() => {
-        const saved = localStorage.getItem('magicSheetConfigs');
+    useEffect(() => {
+        const saved = localStorage.getItem(STORAGE_KEYS.MAGIC_SHEET_CONFIGS);
         if (saved) {
-            setPurposeConfigs(JSON.parse(saved));
+            try {
+                setPurposeConfigs(JSON.parse(saved));
+            } catch (e) {
+                console.warn('Failed to parse magicSheetConfigs', e);
+            }
         }
     }, []);
 
-    React.useEffect(() => {
-        localStorage.setItem('magicSheet_groupBy', groupByField);
+    useEffect(() => {
+        localStorage.setItem(STORAGE_KEYS.MAGIC_SHEET_GROUP_BY, groupByField);
     }, [groupByField]);
 
-    React.useEffect(() => {
-        localStorage.setItem('magicSheet_hideDuplicates', hideDuplicates);
+    useEffect(() => {
+        localStorage.setItem(STORAGE_KEYS.MAGIC_SHEET_HIDE_DUPLICATES, hideDuplicates);
     }, [hideDuplicates]);
 
 
@@ -215,13 +225,13 @@ export function MagicSheetReport() {
     const saveConfig = (purpose, config) => {
         const updated = { ...purposeConfigs, [purpose]: config };
         setPurposeConfigs(updated);
-        localStorage.setItem('magicSheetConfigs', JSON.stringify(updated));
+        localStorage.setItem(STORAGE_KEYS.MAGIC_SHEET_CONFIGS, JSON.stringify(updated));
     };
 
     const instruments = useLiveQuery(() => db.instruments.toArray());
 
     // Helper to get field value
-    const getFieldValue = React.useCallback((inst, fieldId) => {
+    const getFieldValue = useCallback((inst, fieldId) => {
         if (fieldId.startsWith('custom:')) {
             const customKey = fieldId.replace('custom:', '');
             return inst.customFields?.[customKey] || '(No Value)';
@@ -230,7 +240,7 @@ export function MagicSheetReport() {
     }, []);
 
     // Process data into groups - this MUST be a useMemo to maintain hook order
-    const { groups, orderedGroupKeys, sortedGroups, processedGroups } = React.useMemo(() => {
+    const { orderedGroupKeys, sortedGroups, processedGroups } = useMemo(() => {
         if (!instruments) {
             return { groups: {}, orderedGroupKeys: [], sortedGroups: [], processedGroups: [] };
         }
@@ -321,7 +331,7 @@ export function MagicSheetReport() {
     // Save group order when it changes
     const saveGroupOrder = (newOrder) => {
         setGroupOrder(newOrder);
-        localStorage.setItem('magicSheet_groupOrder', JSON.stringify(newOrder));
+        localStorage.setItem(STORAGE_KEYS.MAGIC_SHEET_GROUP_ORDER, JSON.stringify(newOrder));
     };    // Find active group for group overlay
     const activeGroup = activeGroupId ? sortedGroups.find(g => g.purpose === activeGroupId) : null;
 
@@ -373,7 +383,7 @@ export function MagicSheetReport() {
                 <button
                     onClick={() => {
                         setGroupOrder(null);
-                        localStorage.removeItem('magicSheet_groupOrder');
+                        localStorage.removeItem(STORAGE_KEYS.MAGIC_SHEET_GROUP_ORDER);
                     }}
                     className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
                 >
@@ -383,17 +393,7 @@ export function MagicSheetReport() {
 
             <div className="h-4 w-px bg-gray-300"></div>
 
-            <div className="flex items-center gap-2">
-                <span className="font-bold text-gray-600 uppercase tracking-wider text-[10px]">Orientation:</span>
-                <select
-                    value={orientation}
-                    onChange={(e) => setOrientation(e.target.value)}
-                    className="bg-white text-black border border-gray-300 rounded px-2 py-1 cursor-pointer hover:border-indigo-500 focus:outline-none focus:border-indigo-500"
-                >
-                    <option value="portrait">Portrait</option>
-                    <option value="landscape">Landscape</option>
-                </select>
-            </div>
+            <OrientationSelect value={orientation} onChange={setOrientation} />
 
             <div className="h-4 w-px bg-gray-300"></div>
 
@@ -430,7 +430,6 @@ export function MagicSheetReport() {
                                 const bHidden = (purposeConfigs[b.purpose] || {}).isHidden ? 1 : 0;
                                 return aHidden - bHidden;
                             }).map(group => {
-                                const isNoValueGroup = group.purpose.startsWith('(No ');
                                 const config = purposeConfigs[group.purpose] || {
                                     sortOrder: 'numerical',
                                     fillDirection: 'bottom',
@@ -462,7 +461,6 @@ export function MagicSheetReport() {
                                     <SortableGroup
                                         key={group.purpose}
                                         id={group.purpose}
-                                        accentColor={config.isHidden ? '#9ca3af' : accentColor}
                                         className={config.cardWidth === '2/3' ? 'md:col-span-2' : config.cardWidth === 'full' ? 'md:col-span-2 lg:col-span-3' : ''}
                                         isMenuOpen={isEditing}
                                         onMenuClick={() => setEditingPurpose(isEditing ? null : group.purpose)}
@@ -472,8 +470,8 @@ export function MagicSheetReport() {
                                             <div
                                                 className="px-4 py-3 print:py-1.5 flex items-center justify-between overflow-hidden rounded-t-xl"
                                                 style={{
-                                                    background: `linear - gradient(135deg, ${accentColor}22 0 %, ${accentColor}08 100 %)`,
-                                                    borderBottom: `3px solid ${accentColor} `
+                                                    background: `linear-gradient(135deg, ${accentColor}22 0%, ${accentColor}08 100%)`,
+                                                    borderBottom: `3px solid ${accentColor}`
                                                 }}
                                             >
                                                 <div className="flex items-center gap-3">
@@ -603,7 +601,7 @@ export function MagicSheetReport() {
 
                                                                 return (
                                                                     <div key={inst.id} style={{ gridRow, gridColumn: gridCol }}>
-                                                                        <InstrumentCell inst={inst} config={config} />
+                                                                        <InstrumentCell inst={inst} />
                                                                     </div>
                                                                 );
                                                             })}

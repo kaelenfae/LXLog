@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import classNames from 'classnames';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
+import { STORAGE_KEYS } from '../constants';
 
 export function Sidebar() {
     const metadata = useLiveQuery(() => db.showMetadata.toArray());
@@ -83,13 +84,17 @@ export function Sidebar() {
                 <div className="flex flex-col gap-0.5">
                     <div className="text-xs text-[var(--text-secondary)]">Show</div>
                     <div className="text-sm font-medium text-[var(--text-primary)] truncate" title={showInfo.name}>{showInfo.name}</div>
-                    {(showInfo.venue || showInfo.designer) && (
-                        <div className="text-xs text-[var(--text-tertiary)] mt-1 truncate">
-                            {showInfo.venue && <span>{showInfo.venue}</span>}
-                            {showInfo.venue && showInfo.designer && <span className="mx-1">•</span>}
-                            {showInfo.designer && <span>{showInfo.designer}</span>}
-                        </div>
-                    )}
+                    {(() => {
+                        const venueName = localStorage.getItem(STORAGE_KEYS.VENUE_NAME) || '';
+                        if (!venueName && !showInfo.designer) return null;
+                        return (
+                            <div className="text-xs text-[var(--text-tertiary)] mt-1 truncate">
+                                {venueName && <span>{venueName}</span>}
+                                {venueName && showInfo.designer && <span className="mx-1">•</span>}
+                                {showInfo.designer && <span>{showInfo.designer}</span>}
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
 

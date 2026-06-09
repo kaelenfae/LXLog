@@ -3,13 +3,15 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { ReportLayout } from './ReportLayout';
 import { ConfigureColumnsButton, ConfigureColumnsHeader, DraggableColumnItem } from './ConfigureColumns';
-import { getGelColor } from '../utils/gelData';
 import { formatAddress } from '../utils/addressFormatter';
+import { formatChannelDisplay } from '../utils/channelUtils';
 import { useSettings } from '../hooks/useSettings';
 import { HangingSchedulePDF } from './HangingSchedulePDF';
 import { useShowInfo } from '../hooks/useShowInfo';
 import { PDFDownloadButton } from './PDFDownloadButton';
 import { OrientationSelect } from './OrientationSelect';
+import { ColorSwatch } from './ColorSwatch';
+import { STORAGE_KEYS } from '../constants';
 
 export function HangingScheduleReport() {
     const [orientation, setOrientation] = React.useState('portrait');
@@ -21,6 +23,7 @@ export function HangingScheduleReport() {
         position: 'Position',
         unit: 'Unit',
         type: 'Type',
+        distance: 'Dist Center',
         watt: 'Wattage',
         purpose: 'Purpose',
         color: 'Color',
@@ -36,6 +39,7 @@ export function HangingScheduleReport() {
             { id: 'position', label: 'Position' },
             { id: 'unit', label: 'Unit' },
             { id: 'type', label: 'Type' },
+            { id: 'distance', label: 'Dist Center' },
             { id: 'watt', label: 'Wattage' },
             { id: 'purpose', label: 'Purpose' },
             { id: 'color', label: 'Color' },
@@ -57,6 +61,7 @@ export function HangingScheduleReport() {
         position: true,
         unit: true,
         type: true,
+        distance: true,
         watt: true,
         purpose: true,
         color: true,
@@ -65,7 +70,7 @@ export function HangingScheduleReport() {
         address: true
     });
     const [columnOrder, setColumnOrder] = React.useState([
-        'position', 'unit', 'type', 'watt', 'purpose', 'color', 'gobo', 'channel', 'address'
+        'position', 'unit', 'type', 'distance', 'watt', 'purpose', 'color', 'gobo', 'channel', 'address'
     ]);
     const [draggedColumn, setDraggedColumn] = React.useState(null);
     const [hasSetDefaults, setHasSetDefaults] = React.useState(false);
@@ -85,18 +90,40 @@ export function HangingScheduleReport() {
 
     // Load saved column order and visibility from localStorage
     React.useEffect(() => {
-        const savedOrder = localStorage.getItem('hangingSchedule_columnOrder');
-        const savedVisibility = localStorage.getItem('hangingSchedule_visibleColumns');
-        if (savedOrder) setColumnOrder(JSON.parse(savedOrder));
+        const savedOrder = localStorage.getItem(STORAGE_KEYS.HANGING_SCHEDULE_COLUMN_ORDER);
+        const savedVisibility = localStorage.getItem(STORAGE_KEYS.HANGING_SCHEDULE_VISIBLE_COLUMNS);
+        if (savedOrder) {
+            try {
+                setColumnOrder(JSON.parse(savedOrder));
+            } catch (e) {
+                console.warn('Failed to parse hangingSchedule_columnOrder', e);
+            }
+        }
         if (savedVisibility) {
-            const parsed = JSON.parse(savedVisibility);
-            // Ensure new dynamic fields are merged into visibility map (default false if not present)
-            setVisibleColumns(prev => ({ ...prev, ...parsed }));
+            try {
+                const parsed = JSON.parse(savedVisibility);
+                // Ensure new dynamic fields are merged into visibility map (default false if not present)
+                setVisibleColumns(prev => ({ ...prev, ...parsed }));
+            } catch (e) {
+                console.warn('Failed to parse hangingSchedule_visibleColumns', e);
+            }
         }
     }, []);
 
     const instruments = useLiveQuery(async () => {
         const all = await db.instruments.toArray();
+
+        // Map main unit for each channel per position to keep parts together
+        const channelMainUnits = {};
+        all.forEach(inst => {
+            if (!inst.channel) return;
+            const key = `${inst.position || ''}_${inst.channel}`;
+            const part = parseInt(inst.part) || 1;
+            if (!channelMainUnits[key] || part < channelMainUnits[key].part) {
+                channelMainUnits[key] = { unit: inst.unit || '', part: part };
+            }
+        });
+
         return all.sort((a, b) => {
             const posA = a.position || '';
             const posB = b.position || '';
@@ -108,6 +135,19 @@ export function HangingScheduleReport() {
             const cmpPos = posA.localeCompare(posB, undefined, { numeric: true });
             if (cmpPos !== 0) return cmpPos;
 
+            // Use effective unit to keep channel parts together
+            const effUnitA = a.channel && channelMainUnits[`${posA}_${a.channel}`] ? channelMainUnits[`${posA}_${a.channel}`].unit : (a.unit || '');
+            const effUnitB = b.channel && channelMainUnits[`${posB}_${b.channel}`] ? channelMainUnits[`${posB}_${b.channel}`].unit : (b.unit || '');
+
+            const cmpEffUnit = effUnitA.localeCompare(effUnitB, undefined, { numeric: true });
+            if (cmpEffUnit !== 0) return cmpEffUnit;
+
+            // Sort by part if effective unit is the same
+            const partA = parseInt(a.part) || 1;
+            const partB = parseInt(b.part) || 1;
+            if (partA !== partB) return partA - partB;
+
+            // Fallback to actual unit
             const unitA = a.unit || '';
             const unitB = b.unit || '';
             return unitA.localeCompare(unitB, undefined, { numeric: true });
@@ -125,13 +165,12 @@ export function HangingScheduleReport() {
             const defaults = { ...visibleColumns };
 
             // Only update defaults for base fields that were previously hardcoded
-            const baseIds = ['position', 'unit', 'type', 'watt', 'purpose', 'color', 'gobo', 'channel', 'address'];
-
             // Check data presence for base fields
             instruments.forEach(inst => {
                 if (inst.position) defaults.position = true;
                 if (inst.unit) defaults.unit = true;
                 if (inst.type) defaults.type = true;
+                if (inst.distance) defaults.distance = true;
                 if (inst.watt) defaults.watt = true;
                 if (inst.purpose) defaults.purpose = true;
                 if (inst.color) defaults.color = true;
@@ -159,7 +198,7 @@ export function HangingScheduleReport() {
     const toggleColumn = (key) => {
         const updated = { ...visibleColumns, [key]: !visibleColumns[key] };
         setVisibleColumns(updated);
-        localStorage.setItem('hangingSchedule_visibleColumns', JSON.stringify(updated));
+        localStorage.setItem(STORAGE_KEYS.HANGING_SCHEDULE_VISIBLE_COLUMNS, JSON.stringify(updated));
     };
 
     const handleDragStart = (e, columnId) => {
@@ -184,26 +223,27 @@ export function HangingScheduleReport() {
         newOrder.splice(targetIndex, 0, draggedColumn);
 
         setColumnOrder(newOrder);
-        localStorage.setItem('hangingSchedule_columnOrder', JSON.stringify(newOrder));
+        localStorage.setItem(STORAGE_KEYS.HANGING_SCHEDULE_COLUMN_ORDER, JSON.stringify(newOrder));
         setDraggedColumn(null);
     };
 
     const resetColumns = () => {
-        const defaultOrder = ['position', 'unit', 'type', 'watt', 'purpose', 'color', 'gobo', 'channel', 'address', ...dynamicColumns.filter(c => c.isCustom).map(c => c.id)];
+        const defaultOrder = ['position', 'unit', 'type', 'distance', 'watt', 'purpose', 'color', 'gobo', 'channel', 'address', ...dynamicColumns.filter(c => c.isCustom).map(c => c.id)];
         setColumnOrder(defaultOrder);
-        localStorage.removeItem('hangingSchedule_columnOrder');
-        localStorage.removeItem('hangingSchedule_visibleColumns');
+        localStorage.removeItem(STORAGE_KEYS.HANGING_SCHEDULE_COLUMN_ORDER);
+        localStorage.removeItem(STORAGE_KEYS.HANGING_SCHEDULE_VISIBLE_COLUMNS);
 
         // Reset visibility to defaults based on data
         if (instruments) {
             const defaults = {
-                position: false, unit: false, type: false, watt: false,
+                position: false, unit: false, type: false, distance: false, watt: false,
                 purpose: false, color: false, gobo: false, channel: false, address: false
             };
             instruments.forEach(inst => {
                 if (inst.position) defaults.position = true;
                 if (inst.unit) defaults.unit = true;
                 if (inst.type) defaults.type = true;
+                if (inst.distance) defaults.distance = true;
                 if (inst.watt) defaults.watt = true;
                 if (inst.purpose) defaults.purpose = true;
                 if (inst.color) defaults.color = true;
@@ -318,12 +358,14 @@ export function HangingScheduleReport() {
                     instruments={instruments}
                     visibleColumns={visibleColumns}
                     columnLabels={columnLabels}
+                    columnOrder={columnOrder}
                     includeCover={includeCover}
                     orientation={orientation}
                     channelDisplayMode={channelDisplayMode}
                     addressMode={addressMode}
                     showUniverse1={showUniverse1}
                     universeSeparator={universeSeparator}
+                    showSwatches={showSwatches}
                 />
             }
             fileName={`${(showInfo.name || 'Show').replace(/\s+/g, '_')}_HangingSchedule.pdf`}
@@ -335,16 +377,14 @@ export function HangingScheduleReport() {
             case 'position': return inst.position;
             case 'unit': return inst.unit;
             case 'type': return inst.type;
+            case 'distance': return inst.distance;
             case 'watt': return inst.watt;
             case 'purpose': return <span className="italic text-gray-600">{inst.purpose}</span>;
             case 'color':
                 return (
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1.5">
                         {showSwatches && inst.color && (
-                            <span
-                                className="inline-block w-3 h-3 border border-gray-400 rounded-sm"
-                                style={{ backgroundColor: getGelColor(inst.color) }}
-                            />
+                            <ColorSwatch color={inst.color} className="w-4 h-4 shrink-0" rounded="rounded-sm" />
                         )}
                         {inst.color}
                     </span>
@@ -353,9 +393,8 @@ export function HangingScheduleReport() {
             case 'channel': {
                 const isPart = inst.part > 1;
                 if (isPart) {
-                    if (channelDisplayMode === 'parts') return <span className="text-indigo-600 font-bold">P{inst.part}</span>;
-                    if (channelDisplayMode === 'dots') return <span className="text-indigo-600 font-bold">.{inst.part}</span>;
-                    if (channelDisplayMode === 'hide') return '';
+                    const display = formatChannelDisplay(inst.channel, inst.part, channelDisplayMode, true);
+                    return display ? <span className="text-indigo-600 font-bold">{display}</span> : '';
                 }
                 return inst.channel;
             }
@@ -366,7 +405,7 @@ export function HangingScheduleReport() {
                     );
                 }
                 return formatAddress(inst.address, addressMode, showUniverse1, universeSeparator);
-            default:
+            default: {
                 // Handle Focus Status as checkbox
                 if (columnId.toLowerCase().includes('focus') && columnId.toLowerCase().includes('status')) {
                     const value = inst.customFields ? inst.customFields[columnId] : '';
@@ -389,6 +428,7 @@ export function HangingScheduleReport() {
                     return <span className="text-gray-700">{inst.customFields ? inst.customFields[columnId] : ''}</span>;
                 }
                 return '';
+            }
         }
     };
 

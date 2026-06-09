@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
-import { GEL_DATA, getContrastColor } from '../utils/gelData';
+import PropTypes from 'prop-types';
+import { GEL_DATA } from '../utils/gelData';
 
 export function ColorPicker({ onClose, onSelect }) {
     const [searchTerm, setSearchTerm] = useState('');
-    const [filter, setFilter] = useState('ALL'); // ALL, LEE, ROSCO, GAM
+    const [filter, setFilter] = useState('ALL'); // ALL, LEE, ROSCO, CUSTOM
 
     const filteredGels = useMemo(() => {
         const term = searchTerm.toLowerCase();
-        return Object.entries(GEL_DATA).filter(([code, color]) => {
+        return Object.entries(GEL_DATA).filter(([code]) => {
             // Filter by Manufacturer
             if (filter === 'LEE' && !code.startsWith('L')) return false;
             if (filter === 'ROSCO' && !code.startsWith('R')) return false;
@@ -77,7 +78,7 @@ export function ColorPicker({ onClose, onSelect }) {
                                     />
                                     <button 
                                         onClick={() => onSelect(searchTerm)}
-                                        disabled={!/^#[0-9A-Fa-f]{3,6}$/.test(searchTerm)}
+                                        disabled={!/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(searchTerm)}
                                         className="px-4 py-1.5 bg-[var(--accent-primary)] text-white rounded text-sm font-bold hover:bg-[var(--accent-hover)] disabled:opacity-50 transition-colors"
                                     >
                                         Apply
@@ -139,3 +140,8 @@ export function ColorPicker({ onClose, onSelect }) {
         </div>
     );
 }
+
+ColorPicker.propTypes = {
+    onClose: PropTypes.func.isRequired,
+    onSelect: PropTypes.func.isRequired,
+};
